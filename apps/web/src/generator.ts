@@ -11,6 +11,13 @@ import {
   type Scene,
 } from "@vf/schema";
 
+export type StockMediaMode =
+  | "videos_and_photos"
+  | "videos_only"
+  | "photos_only"
+  | "wikimedia_only"
+  | "synthetic_seed";
+
 export interface StockShotSpec {
   assetId: string;
   title: string;
@@ -18,6 +25,15 @@ export interface StockShotSpec {
   tags: string[];
   mood: string;
   durationUs: number;
+  kind?: "video" | "image";
+  width?: number;
+  height?: number;
+  uri?: string;
+  previewThumbUrl?: string;
+  provider?: "pixabay" | "wikimedia" | "upload" | "seed";
+  license?: Asset["license"];
+  isUpload?: boolean;
+  isLiveStock?: boolean;
 }
 
 export const STOCK_CATALOG: StockShotSpec[] = [
@@ -103,10 +119,96 @@ export const STOCK_CATALOG: StockShotSpec[] = [
   },
 ];
 
+export interface ScriptPreset {
+  id: string;
+  label: string;
+  mood: string;
+  script: string;
+}
+
+export const SCRIPT_PRESETS: ScriptPreset[] = [
+  {
+    id: "product_launch",
+    label: "Startup Product Launch (3 scenes)",
+    mood: "energetic",
+    script: [
+      "Our team starts every morning with a quick planning session.",
+      "Revenue grew steadily throughout the year.",
+      "Then we shipped the first version to happy customers.",
+    ].join("\n\n"),
+  },
+  {
+    id: "cloud_infra",
+    label: "Cloud Scale & Engineering (4 scenes)",
+    mood: "futuristic",
+    script: [
+      "Global traffic across downtown city markets demanded a faster cloud architecture.",
+      "Our engineering team wrote new software on their laptops to automate deployment.",
+      "High-density cloud server racks now scale network security in real time.",
+      "We announced the product launch on stage to celebrate with our users.",
+    ].join("\n\n"),
+  },
+  {
+    id: "clean_energy",
+    label: "Clean Energy & Global Supply (4 scenes)",
+    mood: "inspiring",
+    script: [
+      "Clean wind energy spinning over green hills powers our sustainable future.",
+      "Autonomous warehouse robots and logistics containers move shipments around the world.",
+      "Financial metrics and sales growth charts proved that green operations are profitable.",
+      "Happy customers experience faster delivery right from their mobile phones.",
+    ].join("\n\n"),
+  },
+  {
+    id: "clinical_ai",
+    label: "Clinical AI & Patient Care (3 scenes)",
+    mood: "calm",
+    script: [
+      "Physicians in modern clinics review patient medical scans with greater precision.",
+      "Secure cloud server infrastructure protects clinical data across every hospital.",
+      "Our collaborative office team meets daily to support doctors and patients.",
+    ].join("\n\n"),
+  },
+];
+
+const uploadedCatalog = new Map<string, StockShotSpec>();
+const liveStockCatalog = new Map<string, StockShotSpec>();
+
+export function registerUploadedCatalogSpec(spec: StockShotSpec): void {
+  uploadedCatalog.set(spec.assetId, { ...spec, isUpload: true, provider: "upload" });
+}
+
+export function registerLiveStockCatalogSpec(spec: StockShotSpec): void {
+  liveStockCatalog.set(spec.assetId, { ...spec, isLiveStock: true });
+}
+
+export function getLiveStockAssetRecord(): Record<string, Asset> {
+  const out: Record<string, Asset> = {};
+  for (const spec of liveStockCatalog.values()) {
+    out[spec.assetId] = {
+      id: spec.assetId,
+      type: spec.kind ?? "video",
+      uri: spec.uri ?? `s3://vf/stock/${spec.assetId}.mp4`,
+      durationUs: spec.durationUs,
+      width: spec.width ?? 1280,
+      height: spec.height ?? 720,
+      fps: (spec.kind ?? "video") === "video" ? 30 : undefined,
+      origin: "stock",
+      license: spec.license,
+    };
+  }
+  return out;
+}
+
+export function getAllCatalogSpecs(): StockShotSpec[] {
+  return [...uploadedCatalog.values(), ...liveStockCatalog.values(), ...STOCK_CATALOG];
+}
+
 export function catalogAssetsRecord(): Record<string, Asset> {
   const out: Record<string, Asset> = {
     a1: { id: "a1", type: "video", uri: "s3://vf/demo-a1.mp4", durationUs: secToUs(30), origin: "stock" },
     a2: { id: "a2", type: "video", uri: "s3://vf/demo-a2.mp4", durationUs: secToUs(30), origin: "stock" },
+    ...getLiveStockAssetRecord(),
   };
   for (const item of STOCK_CATALOG) {
     out[item.assetId] = {
@@ -127,19 +229,35 @@ export function catalogAssetsRecord(): Record<string, Asset> {
 const STOPWORDS = new Set([
   "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
   "our", "we", "every", "then", "that", "this", "is", "are", "was", "were", "be", "been",
-  "from", "into", "over", "throughout",
+  "from", "into", "over", "throughout", "now", "across", "their", "around", "right",
 ]);
 
 export function tokenizeText(text: string): string[] {
   return (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2 && !STOPWORDS.has(w));
 }
 
-export function extractSceneIntent(narration: string): Scene["intent"] {
-  const keywords = Array.from(new Set(tokenizeText(narration))).slice(0, 6);
+function inferMoodFromTokens(tokens: string[], fallback = "energetic"): string {
+  const set = new Set(tokens);
+  if (set.has("doctor") || set.has("medical") || set.has("clinic") || set.has("patient")) return "calm";
+  if (set.has("energy") || set.has("wind") || set.has("launch") || set.has("stage")) return "inspiring";
+  if (set.has("cloud") || set.has("server") || set.has("network")) return "futuristic";
+  if (set.has("revenue") || set.has("growth") || set.has("chart") || set.has("profit")) return "optimistic";
+  if (set.has("code") || set.has("laptop") || set.has("software") || set.has("engineering")) return "focused";
+  if (set.has("customer") || set.has("happy") || set.has("phone")) return "warm";
+  return fallback;
+}
+
+export function extractSceneIntent(narration: string, preferredMood?: string): Scene["intent"] {
+  const tokens = tokenizeText(narration);
+  const keywords = Array.from(new Set(tokens)).slice(0, 6);
+  const mood =
+    preferredMood && preferredMood !== "auto"
+      ? preferredMood
+      : inferMoodFromTokens(tokens, "energetic");
   return {
     literal: narration.trim(),
     keywords,
-    mood: "energetic",
+    mood,
   };
 }
 
@@ -149,7 +267,7 @@ export interface RankedShotMatch {
 }
 
 /**
- * Score and rank stock shots against a scene's `intent` (`literal`, `keywords`, `mood`),
+ * Score and rank stock + uploaded shots against a scene's `intent` (`literal`, `keywords`, `mood`),
  * applying a repeat penalty for already-used assets.
  */
 export function rankShotsForIntent(
@@ -162,7 +280,8 @@ export function rankShotsForIntent(
     ...intent.keywords.map((k) => k.toLowerCase()),
   ]);
 
-  const scored = STOCK_CATALOG.map((spec) => {
+  const catalog = getAllCatalogSpecs();
+  const scored = catalog.map((spec) => {
     const docTokens = new Set([...tokenizeText(spec.caption), ...spec.tags.map((t) => t.toLowerCase())]);
     let hits = 0;
     for (const qt of queryTokens) {
@@ -180,8 +299,12 @@ export function rankShotsForIntent(
     const denom = Math.max(1, queryTokens.size);
     const semantic = Math.min(1, hits / denom);
     const moodBonus = intent.mood && intent.mood.toLowerCase() === spec.mood.toLowerCase() ? 0.1 : 0;
+    const uploadBonus = spec.isUpload && hits > 0 ? 0.16 : 0;
+    const liveStockBonus = spec.isLiveStock && hits > 0 ? 0.14 : 0;
     const repeatPenalty = usedAssetIds.has(spec.assetId) ? 0.25 : 0;
-    const score = Number((0.75 * semantic + moodBonus - repeatPenalty).toFixed(4));
+    const score = Number(
+      Math.min(0.99, Math.max(0.05, 0.75 * semantic + moodBonus + uploadBonus + liveStockBonus - repeatPenalty)).toFixed(4),
+    );
     return { spec, score };
   });
 
@@ -207,7 +330,11 @@ function estimateDurationUs(narration: string): number {
  * Build a single atomic `batch` op (`actor: "ai"`) that generates or updates scenes and
  * timeline clips from a narration script while strictly respecting `canOverwrite(project, clip)`.
  */
-export function buildGenerateFromScriptOp(project: Project, script: string): Op {
+export function buildGenerateFromScriptOp(
+  project: Project,
+  script: string,
+  opts: { preferredMood?: string } = {},
+): Op {
   const sentences = splitScriptIntoSentences(script);
   if (sentences.length === 0) {
     throw new Error("Script must contain at least one sentence.");
@@ -243,7 +370,7 @@ export function buildGenerateFromScriptOp(project: Project, script: string): Op 
   const newScenes: Scene[] = sentences.map((narration, idx) => ({
     id: `scene_${idx + 1}`,
     narration,
-    intent: extractSceneIntent(narration),
+    intent: extractSceneIntent(narration, opts.preferredMood),
     clipIds: [],
     locked: false,
   }));
@@ -359,16 +486,25 @@ export function buildRegenerateSceneOp(project: Project, sceneId: string): Op | 
   if (targetClips.length === 0) return null;
 
   const ranked = rankShotsForIntent(scene.intent);
+  const allAssets = catalogAssetsRecord();
   const ops: Op[] = [];
 
   for (const clip of targetClips) {
     const currentAssetId = clip.source?.assetId;
     const curIdx = ranked.findIndex((r) => r.spec.assetId === currentAssetId);
     const nextMatch = ranked[(curIdx + 1) % ranked.length]!;
+    const nextId = nextMatch.spec.assetId;
+    if (!project.assets[nextId] && allAssets[nextId]) {
+      ops.push({
+        type: "setProp",
+        path: ["assets", nextId],
+        value: allAssets[nextId],
+      });
+    }
     ops.push({
       type: "replaceMedia",
       clipId: clip.id,
-      assetId: nextMatch.spec.assetId,
+      assetId: nextId,
       in: 0,
     });
   }

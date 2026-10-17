@@ -4,7 +4,7 @@ import pg from "pg";
 import { Project, QUEUES, type RenderJob } from "@vf/schema";
 import { exportProjectToMp4 } from "./export";
 
-export { exportProjectToMp4, projectDurationUs, resolveFfmpegBin } from "./export";
+export { encodeMonoPcm16Wav, exportProjectToMp4, projectDurationUs, resolveFfmpegBin } from "./export";
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const OUTPUT_DIR = process.env.RENDER_OUTPUT_DIR ?? path.resolve(process.cwd(), "renders");

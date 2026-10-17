@@ -444,11 +444,10 @@ export async function buildKokoroNeuralVoiceoverOp(
  * into a single Web Audio `AudioBuffer` (24 kHz mono) aligned to the timeline.
  * Returns `null` if no neural audio has been synthesized yet (never plays synthetic tone oscillators).
  */
-export function renderProjectVoiceoverBuffer(
-  audioCtx: AudioContext,
+export function mixProjectVoiceoverSamples(
   project: Project,
   totalDurationUs: number,
-): AudioBuffer | null {
+): Float32Array | null {
   const voiceTrack = project.tracks.find((t) => t.id === "a1" || t.kind === "audio");
   if (!voiceTrack || voiceTrack.muted) return null;
 
@@ -459,8 +458,7 @@ export function renderProjectVoiceoverBuffer(
 
   const sampleRate = 24_000;
   const totalSamples = Math.max(1, Math.ceil((totalDurationUs / 1_000_000) * sampleRate));
-  const buffer = audioCtx.createBuffer(1, totalSamples, sampleRate);
-  const channel = buffer.getChannelData(0);
+  const channel = new Float32Array(totalSamples);
 
   for (const clip of voiceClips) {
     const cached = clip.source ? kokoroAudioCache.get(clip.source.assetId) : undefined;
@@ -493,5 +491,68 @@ export function renderProjectVoiceoverBuffer(
     }
   }
 
+  return channel;
+}
+
+export function renderProjectVoiceoverBuffer(
+  audioCtx: AudioContext,
+  project: Project,
+  totalDurationUs: number,
+): AudioBuffer | null {
+  const mixed = mixProjectVoiceoverSamples(project, totalDurationUs);
+  if (!mixed) return null;
+  const sampleRate = 24_000;
+  const buffer = audioCtx.createBuffer(1, mixed.length, sampleRate);
+  buffer.getChannelData(0).set(mixed);
   return buffer;
+}
+
+/**
+ * Encodes the mixed 24 kHz Kokoro-82M voiceover track into a base64-encoded 16-bit PCM WAV
+ * so the MP4 export endpoint can mux the exact neural voiceover audio into the exported MP4.
+ */
+export function encodeProjectVoiceoverWavBase64(
+  project: Project,
+  totalDurationUs: number,
+): string | null {
+  const samples = mixProjectVoiceoverSamples(project, totalDurationUs);
+  if (!samples) return null;
+
+  const sampleRate = 24_000;
+  const numSamples = samples.length;
+  const dataBytes = numSamples * 2;
+  const wav = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(wav);
+
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + dataBytes, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, dataBytes, true);
+
+  for (let i = 0; i < numSamples; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]!));
+    const pcm = s < 0 ? Math.round(s * 32768) : Math.round(s * 32767);
+    view.setInt16(44 + i * 2, pcm, true);
+  }
+
+  const bytes = new Uint8Array(wav);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
 }

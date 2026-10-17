@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Canvas2DContextLike } from "@vf/render";
 import { secToUs, usToSec } from "@vf/schema";
+import { onMediaCacheUpdated } from "./mediaCache";
 import { renderPreviewFrame } from "./previewRender";
 import { useEditor } from "./store";
 import { hasAnyCachedKokoroAudio, renderProjectVoiceoverBuffer } from "./tts";
@@ -20,6 +21,7 @@ export function Preview() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sliderRef = useRef<HTMLInputElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const [mediaVersion, setMediaVersion] = useState(0);
 
   const maxClipEnd = Object.values(project.clips).reduce((m, c) => Math.max(m, c.start + c.duration), 0);
   const durationUs = Math.max(secToUs(5), maxClipEnd);
@@ -28,12 +30,16 @@ export function Preview() {
   const neuralAudioReady = hasAnyCachedKokoroAudio(project);
 
   useEffect(() => {
+    return onMediaCacheUpdated(() => setMediaVersion((v) => v + 1));
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     renderPreviewFrame(project, playhead, ctx as unknown as Canvas2DContextLike);
-  }, [project, playhead]);
+  }, [project, playhead, mediaVersion]);
 
   // Sync CSS custom properties for range track fill progress (modern-web-guidance: slider)
   useEffect(() => {

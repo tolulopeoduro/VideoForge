@@ -6,7 +6,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import { fixtureTwoClipsWithFade, type Canvas2DContextLike, type CanvasSurfaceLike } from "@vf/render";
 import { describe, expect, it } from "vitest";
 import { renderPreviewFrame } from "../../web/src/previewRender";
-import { exportProjectToMp4, resolveFfmpegBin } from "./export";
+import { encodeMonoPcm16Wav, exportProjectToMp4, resolveFfmpegBin } from "./export";
 
 function createHeadlessSurface(width: number, height: number): CanvasSurfaceLike {
   return createCanvas(width, height) as unknown as CanvasSurfaceLike;
@@ -107,4 +107,92 @@ describe("MP4 export pipeline and preview frame-diff parity", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("muxes 24kHz PCM WAV voiceover audio into the exported MP4 as an AAC stream", async () => {
+    const project = fixtureTwoClipsWithFade(); // 3s @ 30fps
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vf-export-audio-test-"));
+    const mp4Path = path.join(tmpDir, "out_with_audio.mp4");
+    const ffmpegBin = resolveFfmpegBin();
+
+    try {
+      const sampleRate = 24_000;
+      const samples = new Float32Array(sampleRate * 3);
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = 0.25 * Math.sin((2 * Math.PI * 220 * i) / sampleRate);
+      }
+      const wavBuf = encodeMonoPcm16Wav(samples, sampleRate);
+
+      const exportRes = await exportProjectToMp4(project, {
+        outputPath: mp4Path,
+        ffmpegBin,
+        audioWavBytes: wavBuf,
+      });
+
+      expect(exportRes.hasAudio).toBe(true);
+      expect(fs.existsSync(mp4Path)).toBe(true);
+
+      const probe = spawnSync(ffmpegBin, ["-i", mp4Path], { encoding: "utf8" });
+      const info = (probe.stderr ?? "") + (probe.stdout ?? "");
+      expect(info).toMatch(/Video: h264/);
+      expect(info).toMatch(/Audio: aac/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("decodes real uploaded media files from disk via assetFiles and composites them into the exported MP4", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vf-export-upload-test-"));
+    const uploadedPngPath = path.join(tmpDir, "upload_red.png");
+    const mp4Path = path.join(tmpDir, "out_upload.mp4");
+    const ffmpegBin = resolveFfmpegBin();
+
+    try {
+      // Create a solid bright green 320x180 PNG on disk representing an uploaded asset
+      const srcCanvas = createCanvas(320, 180);
+      const srcCtx = srcCanvas.getContext("2d");
+      srcCtx.fillStyle = "#00ff00";
+      srcCtx.fillRect(0, 0, 320, 180);
+      fs.writeFileSync(uploadedPngPath, srcCanvas.toBuffer("image/png"));
+
+      const base = fixtureTwoClipsWithFade();
+      const project = {
+        ...base,
+        assets: {
+          ...base.assets,
+          upload_green: {
+            id: "upload_green",
+            type: "image" as const,
+            uri: "s3://vf/uploads/upload_green.png",
+            durationUs: 5_000_000,
+            width: 320,
+            height: 180,
+            origin: "upload" as const,
+          },
+        },
+        clips: {
+          ...base.clips,
+          c1: {
+            ...base.clips.c1!,
+            source: { assetId: "upload_green", in: 0, speed: 1 },
+          },
+        },
+      };
+
+      await exportProjectToMp4(project, {
+        outputPath: mp4Path,
+        ffmpegBin,
+        assetFiles: { upload_green: uploadedPngPath },
+      });
+
+      const decodedRgba = decodeFrameRgbaFromMp4(mp4Path, 5, 320, 180, ffmpegBin);
+      // Center pixel should be strongly green (G > 200, R < 50, B < 50)
+      const centerOffset = (90 * 320 + 160) * 4;
+      expect(decodedRgba[centerOffset]!).toBeLessThan(50);
+      expect(decodedRgba[centerOffset + 1]!).toBeGreaterThan(200);
+      expect(decodedRgba[centerOffset + 2]!).toBeLessThan(50);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
+

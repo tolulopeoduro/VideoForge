@@ -17,5 +17,7 @@ Record every dependency, model, font, and stock source here before it is added (
 | onnx-community/Kokoro-82M-v1.0-ONNX | 1.0 | model | Apache-2.0 | Yes | https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX |
 | kokoro | 0.9.4 | lib | Apache-2.0 | Yes | https://github.com/hexgrad/kokoro/blob/main/LICENSE |
 | kokoro-js | 1.2.1 | lib | Apache-2.0 | Yes | https://www.npmjs.com/package/kokoro-js (Apache-2.0) |
+| Pixabay API (Videos & Photos) | v1 | stock | Pixabay Content License | Yes | https://pixabay.com/service/license-summary/ (Free for commercial & non-commercial use; cache only active project assets for rendering, no bulk redistribution of raw unaltered files) |
+| Wikimedia Commons API | v1 | stock | CC0 / Public Domain / CC-BY | Yes | https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia (Attribution & license recorded in `Asset.license`) |
 
 Verify every row against the upstream license file; this table is a starting point, not legal advice.

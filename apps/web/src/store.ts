@@ -3,12 +3,14 @@ import {
   applyChecked,
   applyPatches,
   createEmptyProject,
+  Project as ProjectSchema,
   type Actor,
   type Op,
   type Patch,
   type Project,
 } from "@vf/schema";
 import { buildGenerateFromScriptOp, catalogAssetsRecord } from "./generator";
+import { hydrateProjectUploadedAssets } from "./mediaCache";
 import { buildKokoroVoiceoverOp, type KokoroVoiceId } from "./tts";
 
 interface HistoryEntry {
@@ -26,13 +28,15 @@ export interface EditEventRecord {
   createdAt: string;
 }
 
+export type SyncStatus = "synced" | "syncing" | "local";
+
 export const DEFAULT_SCRIPT = [
   "Our team starts every morning with a quick planning session.",
   "Revenue grew steadily throughout the year.",
   "Then we shipped the first version to happy customers.",
-].join(" ");
+].join("\n\n");
 
-function createInitialProject(): Project {
+export function createInitialProject(): Project {
   const base = createEmptyProject({ id: "local", title: "VideoForge Studio" });
   const seeded: Project = {
     ...base,
@@ -44,8 +48,18 @@ function createInitialProject(): Project {
   return applyChecked(withScenes, ttsOp, { actor: "ai" }).next;
 }
 
+let syncChain: Promise<void> = Promise.resolve();
+
+function enqueueSync(fn: () => Promise<void>): void {
+  syncChain = syncChain.then(fn).catch(() => {
+    // Keep queue alive
+  });
+}
+
 interface EditorState {
   project: Project;
+  version: number;
+  syncStatus: SyncStatus;
   past: HistoryEntry[];
   future: HistoryEntry[];
   selection: string[];
@@ -58,6 +72,8 @@ interface EditorState {
   lastError: string | null;
   dispatch: (op: Op, actor?: Actor) => boolean;
   logEditEvent: (event: EditEventType, sceneId: string | undefined, payload: Record<string, unknown>) => void;
+  hydrateFromServer: () => Promise<Project>;
+  resetDemoProject: () => Promise<Project>;
   clearError: () => void;
   undo: () => void;
   redo: () => void;
@@ -72,6 +88,8 @@ interface EditorState {
 /** The UI never mutates the project directly. Everything goes through dispatch(op). */
 export const useEditor = create<EditorState>((set, get) => ({
   project: createInitialProject(),
+  version: 0,
+  syncStatus: "local",
   past: [],
   future: [],
   selection: [],
@@ -84,16 +102,49 @@ export const useEditor = create<EditorState>((set, get) => ({
   lastError: null,
 
   dispatch: (op, actor = "user") => {
-    const { project, past } = get();
+    const { project, past, version } = get();
     try {
       const { next, patches, inverse } = applyChecked(project, op, { actor });
-      set({ project: next, past: [...past, { patches, inverse }], future: [], lastError: null });
+      const nextVer = version + 1;
+      set({
+        project: next,
+        version: nextVer,
+        syncStatus: "syncing",
+        past: [...past, { patches, inverse }],
+        future: [],
+        lastError: null,
+      });
+
+      if (typeof window !== "undefined" && typeof fetch === "function") {
+        enqueueSync(async () => {
+          const res = await fetch(`/api/projects/${encodeURIComponent(project.id)}/ops`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              expectedVersion: version,
+              actor,
+              ops: [op],
+              baseDoc: project,
+            }),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as { version?: number };
+            set({
+              version: typeof data.version === "number" ? data.version : get().version,
+              syncStatus: "synced",
+            });
+          } else {
+            set({ syncStatus: "local" });
+          }
+        });
+      }
       return true;
     } catch (err) {
       set({ lastError: err instanceof Error ? err.message : String(err) });
       return false;
     }
   },
+
   logEditEvent: (event, sceneId, payload) => {
     const entry: EditEventRecord = {
       id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -103,30 +154,144 @@ export const useEditor = create<EditorState>((set, get) => ({
       createdAt: new Date().toISOString(),
     };
     set((s) => ({ editEvents: [entry, ...s.editEvents] }));
+
+    const projectId = get().project.id;
+    if (typeof window !== "undefined" && typeof fetch === "function") {
+      enqueueSync(async () => {
+        await fetch(`/api/projects/${encodeURIComponent(projectId)}/events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sceneId, event, payload }),
+        });
+      });
+    }
   },
+
+  hydrateFromServer: async () => {
+    if (typeof window === "undefined" || typeof fetch !== "function") {
+      return get().project;
+    }
+    try {
+      set({ syncStatus: "syncing" });
+      const res = await fetch("/api/projects/local");
+      if (res.ok) {
+        const data = (await res.json()) as {
+          version: number;
+          doc: unknown;
+          events?: EditEventRecord[];
+        };
+        const parsedDoc = ProjectSchema.parse(data.doc);
+        set({
+          project: parsedDoc,
+          version: data.version ?? 0,
+          editEvents: Array.isArray(data.events) ? data.events : [],
+          past: [],
+          future: [],
+          syncStatus: "synced",
+        });
+        await hydrateProjectUploadedAssets(parsedDoc);
+        return parsedDoc;
+      }
+      // First load: persist initial project to backend
+      const initDoc = get().project;
+      const putRes = await fetch("/api/projects/local", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: 0, doc: initDoc }),
+      });
+      if (putRes.ok) {
+        set({ syncStatus: "synced", version: 0 });
+      } else {
+        set({ syncStatus: "local" });
+      }
+      return initDoc;
+    } catch {
+      set({ syncStatus: "local" });
+      return get().project;
+    }
+  },
+
+  resetDemoProject: async () => {
+    const fresh = createInitialProject();
+    set({
+      project: fresh,
+      version: 0,
+      past: [],
+      future: [],
+      selection: [],
+      playhead: 0,
+      playing: false,
+      editEvents: [],
+      lastError: null,
+      syncStatus: "syncing",
+    });
+    if (typeof window !== "undefined" && typeof fetch === "function") {
+      enqueueSync(async () => {
+        const res = await fetch("/api/projects/local", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: 0, doc: fresh, resetEvents: true }),
+        });
+        set({ syncStatus: res.ok ? "synced" : "local" });
+      });
+    }
+    return fresh;
+  },
+
   clearError: () => set({ lastError: null }),
+
   undo: () => {
-    const { past, future, project } = get();
+    const { past, future, project, version } = get();
     const e = past[past.length - 1];
     if (!e) return;
+    const prevDoc = applyPatches(project, e.inverse);
+    const nextVer = version + 1;
     set({
-      project: applyPatches(project, e.inverse),
+      project: prevDoc,
+      version: nextVer,
       past: past.slice(0, -1),
       future: [e, ...future],
       lastError: null,
+      syncStatus: "syncing",
     });
+    if (typeof window !== "undefined" && typeof fetch === "function") {
+      enqueueSync(async () => {
+        const res = await fetch(`/api/projects/${encodeURIComponent(prevDoc.id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: nextVer, doc: prevDoc }),
+        });
+        set({ syncStatus: res.ok ? "synced" : "local" });
+      });
+    }
   },
+
   redo: () => {
-    const { past, future, project } = get();
+    const { past, future, project, version } = get();
     const e = future[0];
     if (!e) return;
+    const nextDoc = applyPatches(project, e.patches);
+    const nextVer = version + 1;
     set({
-      project: applyPatches(project, e.patches),
+      project: nextDoc,
+      version: nextVer,
       past: [...past, e],
       future: future.slice(1),
       lastError: null,
+      syncStatus: "syncing",
     });
+    if (typeof window !== "undefined" && typeof fetch === "function") {
+      enqueueSync(async () => {
+        const res = await fetch(`/api/projects/${encodeURIComponent(nextDoc.id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: nextVer, doc: nextDoc }),
+        });
+        set({ syncStatus: res.ok ? "synced" : "local" });
+      });
+    }
   },
+
   select: (ids) => set({ selection: ids }),
   setPlayhead: (t) => set({ playhead: Math.max(0, Math.round(t)) }),
   setPlaying: (v) => set((s) => ({ playing: typeof v === "function" ? v(s.playing) : v })),

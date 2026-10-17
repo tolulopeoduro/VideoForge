@@ -291,6 +291,15 @@ textarea {
   min-height: 78px;
 }
 
+/* Auto-sizing script prompt textarea (modern-web-guidance: form-fields-automatically-fit-contents) */
+textarea.vf-script-textarea {
+  field-sizing: content;
+  height: auto;
+  width: 100%;
+  min-block-size: 4lh;
+  max-block-size: 10lh;
+}
+
 textarea::placeholder,
 input::placeholder {
   color: var(--text-muted);

@@ -1,10 +1,12 @@
 import { renderProjectToCanvas2D, type Canvas2DContextLike, type CanvasSurfaceLike } from "@vf/render";
 import type { Project } from "@vf/schema";
+import { createBrowserAssetFrameProvider } from "./mediaCache";
 
 /**
  * Shared browser preview render entry point. Calls `@vf/render`'s `renderProjectToCanvas2D`
- * (which invokes `renderFrame` with `Canvas2DRenderer`) so preview and headless export
- * share the exact same render path.
+ * (which invokes `renderFrame` with `Canvas2DRenderer`) using `createBrowserAssetFrameProvider`
+ * so uploaded real video/image assets render decoded frames and synthetic stock IDs use the
+ * deterministic stub provider.
  */
 export function renderPreviewFrame(
   project: Project,
@@ -17,5 +19,6 @@ export function renderPreviewFrame(
     return c as unknown as CanvasSurfaceLike;
   },
 ): void {
-  renderProjectToCanvas2D(project, tUs, ctx, createSurface);
+  const provider = createBrowserAssetFrameProvider(project, createSurface);
+  renderProjectToCanvas2D(project, tUs, ctx, createSurface, provider);
 }

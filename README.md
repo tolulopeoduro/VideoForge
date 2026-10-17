@@ -43,11 +43,11 @@ AGENTS.md           Rules every agent session must follow
 ## Known gaps (deliberate TODOs)
 
 - Keyframes are split and shifted across `splitClip` and `trimClip` (`transform` numeric props and `audio.gain`); custom effect-level keyframe splitting remains a future enhancement.
-- `renderFrame` (Canvas2D) and the FFmpeg MP4 export worker are implemented; a PixiJS/WebGL GPU backend is a future upgrade.
-- Timeline UI supports pointer drag-to-move with magnetic snapping, edge-trim handles, sticky track headers (`M`/`H`/`L`), NLE keyboard shortcuts, and candidate replacement; multi-clip box selection remains a future enhancement.
+- `renderFrame` (Canvas2D), real uploaded video/image frame decoding (`mediaCache.ts` + `createDiskAssetFrameProvider`), and the FFmpeg H.264/AAC MP4 export pipeline (with 24 kHz Kokoro-82M voiceover audio muxing) are implemented; a PixiJS/WebGL GPU backend is a future upgrade.
+- Timeline UI supports pointer drag-to-move with magnetic snapping, edge-trim handles, sticky track headers (`M`/`H`/`L`), NLE keyboard shortcuts, multi-paragraph script presets, inline scene editing, and persistent op/event storage; multi-clip box selection remains a future enhancement.
 - Indexer implements quality metrics (`sharpness`, `brightness`, `motion`, `stability`, `has_text`) and `search_text`; VLM captioning and live footage indexing remain to be run.
 - Matcher retrieval (`retrieve.py`), ranking (`rank.py`), and `evals/predict.py` are implemented; live OpenCLIP model inference on indexed video assets is not wired yet.
-- No auth, no object-storage upload flow, no stock-provider adapters.
+- Local studio media upload, persistence, and live Pixabay (videos & photos) + Wikimedia Commons stock adapters are implemented; production auth remains future work.
 - Verify licenses (code, model weights, stock terms) before adding any dependency.
 
 ## Suggested first four weeks

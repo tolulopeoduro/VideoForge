@@ -240,11 +240,14 @@ export function renderProjectToCanvas2D(
   tUs: number,
   ctx: Canvas2DContextLike,
   createSurface: (width: number, height: number) => CanvasSurfaceLike,
+  frameProvider?: AssetFrameProvider,
 ): void {
-  const provider = createStubFrameProvider(createSurface, {
-    width: project.canvas.width,
-    height: project.canvas.height,
-  });
+  const provider =
+    frameProvider ??
+    createStubFrameProvider(createSurface, {
+      width: project.canvas.width,
+      height: project.canvas.height,
+    });
   const renderer = new Canvas2DRenderer(ctx, provider);
   renderFrame(project, tUs, renderer);
 }
