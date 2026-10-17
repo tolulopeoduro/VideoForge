@@ -1,0 +1,7 @@
+scenedetect[opencv]
+open_clip_torch
+torch
+psycopg[binary]
+numpy
+opencv-python-headless
+pillow

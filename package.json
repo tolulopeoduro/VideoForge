@@ -1,0 +1,19 @@
+{
+  "name": "videoforge",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "up": "docker compose up -d",
+    "down": "docker compose down",
+    "dev:api": "npm run dev -w @vf/api",
+    "dev:web": "npm run dev -w @vf/web",
+    "dev:render": "npm run dev -w @vf/render-worker",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present && npm run test:py",
+    "test:py": "cd services/matcher && python3 -m unittest discover -s tests"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
