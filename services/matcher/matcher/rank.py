@@ -6,6 +6,7 @@ from .retrieve import (
     RetrievalFilters,
     RetrievedShot,
     TextEmbedder,
+    enrich_intent_from_narration,
     retrieve,
     tokenize,
 )
@@ -76,25 +77,26 @@ def retrieve_and_rank(
     embedder: Optional[TextEmbedder] = None,
     filters: Optional[RetrievalFilters] = None,
     weights: Weights = Weights(),
-    include_abstract: bool = False,
+    include_abstract: bool = True,
 ) -> list[Candidate]:
     """
     End-to-end single-scene retrieval and scoring pipeline:
-      1. Retrieve top `retrieval_k` fused candidates from `conn` (Postgres or InMemoryShotStore).
+      1. Enrich raw/sparse intent and retrieve top `retrieval_k` fused candidates from `conn`.
       2. Convert to `Candidate` objects and score with `base_score`.
       3. Return the top `k` ranked `Candidate`s.
     """
+    enriched = enrich_intent_from_narration(str(intent.get("literal") or ""), intent)
     pool_k = retrieval_k or max(k * 3, 24)
     shots = retrieve(
         conn,
-        intent,
+        enriched,
         k=pool_k,
         embedder=embedder,
         needed_s=needed_s,
         filters=filters,
         include_abstract=include_abstract,
     )
-    candidates = [shot_to_candidate(s, intent) for s in shots]
+    candidates = [shot_to_candidate(s, enriched) for s in shots]
     ranked = rank_candidates(candidates, needed_s=needed_s, weights=weights)
     return ranked[:k]
 
@@ -116,6 +118,7 @@ __all__ = [
     "assign_video_scenes",
     "base_score",
     "compute_quality_score",
+    "enrich_intent_from_narration",
     "rank_candidates",
     "retrieve_and_rank",
     "shot_to_candidate",

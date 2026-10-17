@@ -431,7 +431,26 @@ export async function buildKokoroNeuralVoiceoverOp(
   for (let i = 0; i < project.scenes.length; i++) {
     const scene = project.scenes[i]!;
     if (scene.locked) continue;
+
+    // Reuse cached neural audio if this scene's narration and voice are unchanged
+    const cacheKey = `tts_${scene.id}_${voice}`;
+    const cached = kokoroAudioCache.get(cacheKey);
+    if (cached && cached.voice === voice && cached.text === scene.narration) {
+      const durationUs = Math.max(100_000, Math.round((cached.samples.length / cached.sampleRate) * 1_000_000));
+      map.set(scene.id, {
+        voice,
+        sampleRate: cached.sampleRate,
+        durationUs,
+        waveformPeaks: computePeaksFromFloat32(cached.samples, 40),
+        words: alignWordsToDuration(scene.narration, durationUs),
+        samples: cached.samples,
+      });
+      continue;
+    }
+
     opts.onProgress?.(`Synthesizing Scene ${i + 1}/${project.scenes.length} with Kokoro-82M (${voice})...`);
+    // Yield to the browser event loop so UI updates and pointer interactions remain responsive
+    await new Promise<void>((r) => setTimeout(r, 20));
     const synth = await synthesizeKokoroSceneNeural(scene.narration, voice, speed, opts.onProgress);
     map.set(scene.id, synth);
   }

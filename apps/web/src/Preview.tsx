@@ -16,7 +16,19 @@ export function formatTimecode(tUs: number, fps = 30): string {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}:${String(frame).padStart(2, "0")}`;
 }
 
-export function Preview() {
+export interface PreviewProps {
+  theaterMode?: boolean;
+  onToggleTheater?: () => void;
+  ttsBusy?: boolean;
+  onSynthesizeVoiceover?: () => void;
+}
+
+export function Preview({
+  theaterMode = false,
+  onToggleTheater,
+  ttsBusy = false,
+  onSynthesizeVoiceover,
+}: PreviewProps = {}) {
   const { project, playhead, setPlayhead, playing, setPlaying } = useEditor();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sliderRef = useRef<HTMLInputElement | null>(null);
@@ -55,6 +67,8 @@ export function Preview() {
     if (!playing) return;
     let rafId = 0;
     let lastMs = performance.now();
+    let lastStoreSyncMs = lastMs;
+    let localPlayheadUs = useEditor.getState().playhead;
     let sourceNode: AudioBufferSourceNode | null = null;
 
     if (typeof window !== "undefined" && "AudioContext" in window) {
@@ -69,7 +83,7 @@ export function Preview() {
           sourceNode = ctx.createBufferSource();
           sourceNode.buffer = buf;
           sourceNode.connect(ctx.destination);
-          const startOffsetSec = Math.max(0, Math.min(buf.duration, usToSec(useEditor.getState().playhead)));
+          const startOffsetSec = Math.max(0, Math.min(buf.duration, usToSec(localPlayheadUs)));
           sourceNode.start(0, startOffsetSec);
         }
       } catch {
@@ -80,13 +94,25 @@ export function Preview() {
     const tick = (nowMs: number) => {
       const deltaUs = Math.round((nowMs - lastMs) * 1000);
       lastMs = nowMs;
-      const nextUs = useEditor.getState().playhead + deltaUs;
-      if (nextUs >= durationUs) {
+      localPlayheadUs += deltaUs;
+      if (localPlayheadUs >= durationUs) {
         setPlayhead(0);
         setPlaying(false);
         return;
       }
-      setPlayhead(nextUs);
+
+      // Render canvas directly at display frame rate without forcing a full React tree re-render every 8ms
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (ctx) {
+        renderPreviewFrame(project, localPlayheadUs, ctx as unknown as Canvas2DContextLike);
+      }
+
+      // Throttle Zustand/React state updates to ~18Hz (55ms) so Timeline & App stay silky smooth
+      if (nowMs - lastStoreSyncMs >= 55) {
+        lastStoreSyncMs = nowMs;
+        setPlayhead(localPlayheadUs);
+      }
       rafId = requestAnimationFrame(tick);
     };
 
@@ -116,14 +142,62 @@ export function Preview() {
     : [];
 
   return (
-    <section className="vf-panel">
-      <div className="vf-panel-title">
-        <span>2. Canvas2D Program Monitor + Kokoro-82M Audio</span>
-        <span style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", color: neuralAudioReady ? "#22c55e" : "#38bdf8" }}>
-          {project.canvas.width}×{project.canvas.height} • {project.canvas.fps}fps •{" "}
-          {neuralAudioReady ? "Kokoro-82M 24kHz Ready" : "Click Synthesize TTS for Neural Audio"}
-        </span>
+    <section className="vf-stage-monitor" aria-label="Program Monitor">
+      <div className="vf-monitor-topbar">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span className="vf-monitor-label">Program Monitor</span>
+          <span className="vf-badge vf-badge-ai" style={{ fontVariantNumeric: "tabular-nums" }}>
+            {project.canvas.width}×{project.canvas.height} • {project.canvas.fps}fps
+          </span>
+          <span
+            className="vf-badge"
+            style={{
+              background: "rgba(34, 197, 94, 0.12)",
+              color: "#86efac",
+              border: "1px solid rgba(34, 197, 94, 0.3)",
+              fontSize: 10.5,
+            }}
+            title="Browser preview uses 360p low-res proxy videos and low-res proxy images while editing; full-resolution 720p/1080p media is downloaded only when exporting MP4"
+          >
+            ⚡ Low-Res Proxy Preview (Full-Res on Export)
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {neuralAudioReady ? (
+            <span
+              style={{
+                fontSize: 11,
+                fontVariantNumeric: "tabular-nums",
+                color: "#22c55e",
+              }}
+            >
+              ● Kokoro-82M 24kHz Audio Ready
+            </span>
+          ) : onSynthesizeVoiceover ? (
+            <button
+              type="button"
+              className="vf-btn-sm"
+              disabled={ttsBusy}
+              onClick={onSynthesizeVoiceover}
+              title="Run Kokoro-82M neural 24kHz voiceover synthesis on demand"
+              style={{ borderColor: "rgba(56, 189, 248, 0.45)", color: "#7dd3fc" }}
+            >
+              {ttsBusy ? "Synthesizing..." : "🔊 Synthesize 24kHz Voiceover"}
+            </button>
+          ) : null}
+          {onToggleTheater && (
+            <button
+              type="button"
+              className="vf-btn-sm"
+              onClick={onToggleTheater}
+              aria-pressed={theaterMode}
+            >
+              {theaterMode ? "Show Panels" : "Theater View"}
+            </button>
+          )}
+        </div>
       </div>
+
       <div className="vf-monitor-frame">
         <canvas
           ref={canvasRef}
@@ -136,34 +210,13 @@ export function Preview() {
           }}
         />
         {currentSceneWords.length > 0 && (
-          <div
-            style={{
-              marginTop: 8,
-              padding: "5px 10px",
-              borderRadius: 6,
-              background: "rgba(15, 23, 42, 0.85)",
-              border: "1px solid #1e293b",
-              fontSize: 12,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 5,
-              justifyContent: "center",
-            }}
-            aria-label="Kokoro word-level captions"
-          >
+          <div className="vf-monitor-karaoke" aria-label="Kokoro word-level captions">
             {currentSceneWords.map((w, i) => {
               const isSpoken = playhead >= w.start && playhead <= w.end;
               return (
                 <span
                   key={`${w.start}_${i}`}
-                  style={{
-                    padding: "1px 4px",
-                    borderRadius: 4,
-                    fontWeight: isSpoken ? 700 : 400,
-                    color: isSpoken ? "#090d16" : "#cbd5e1",
-                    background: isSpoken ? "#38bdf8" : "transparent",
-                    transition: "background-color 0.08s ease",
-                  }}
+                  className={isSpoken ? "vf-karaoke-word is-spoken" : "vf-karaoke-word"}
                 >
                   {w.text}
                 </span>
@@ -172,10 +225,11 @@ export function Preview() {
           </div>
         )}
       </div>
+
       <div className="vf-transport-bar">
         <button
+          type="button"
           className="vf-btn-icon"
-          title="Jump to start (0.00s)"
           onClick={() => {
             setPlaying(false);
             setPlayhead(0);
@@ -184,8 +238,8 @@ export function Preview() {
           |&lt;
         </button>
         <button
+          type="button"
           className="vf-btn-icon"
-          title="Step back 1 frame (Left Arrow)"
           onClick={() => {
             setPlaying(false);
             setPlayhead(Math.max(0, playhead - frameStepUs));
@@ -194,16 +248,16 @@ export function Preview() {
           -1f
         </button>
         <button
+          type="button"
           className="vf-btn-primary"
           onClick={() => setPlaying((p) => !p)}
-          style={{ minWidth: 74 }}
-          title="Play / Pause with Kokoro voiceover (Space)"
+          style={{ minWidth: 82 }}
         >
-          {playing ? "Pause" : "Play"}
+          {playing ? "Pause" : "Play"} <span className="vf-kbd">Space</span>
         </button>
         <button
+          type="button"
           className="vf-btn-icon"
-          title="Step forward 1 frame (Right Arrow)"
           onClick={() => {
             setPlaying(false);
             setPlayhead(Math.min(durationUs, playhead + frameStepUs));
@@ -233,7 +287,7 @@ export function Preview() {
           }}
           style={{ flex: 1 }}
         />
-        <span className="vf-timecode" title="MM:SS:FF / Total Duration">
+        <span className="vf-timecode">
           {formatTimecode(playhead, project.canvas.fps)} / {usToSec(durationUs).toFixed(1)}s
         </span>
       </div>

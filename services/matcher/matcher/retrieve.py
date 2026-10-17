@@ -450,6 +450,216 @@ def _retrieve_postgres(
     return results
 
 
+_NON_VISUAL_VERBS = {
+    "our", "we", "starts", "every", "quick", "session", "grew", "steadily",
+    "throughout", "year", "then", "shipped", "first", "version", "were",
+    "by", "slow", "times", "scales", "automatically", "under", "heavy",
+    "is", "transforming", "can", "now", "review", "in", "seconds", "stalled",
+    "stay", "connected", "across", "sort", "thousands", "per", "hour",
+    "around", "clock", "struggled", "keep", "their", "open", "push", "past",
+    "during", "early", "helps", "conserve", "iterate", "rapidly", "replacing",
+    "learn", "faster", "with", "sequence", "gather", "celebrate", "after",
+    "showed", "incredible", "breaking", "down", "created", "real", "was",
+    "weighing", "single", "changed", "entire", "built",
+}
+
+_NARRATION_VISUAL_PATTERNS: list[tuple[set[str], dict[str, Any]]] = [
+    ({"team", "planning", "morning", "meeting", "session"}, {
+        "literal": "people around a table in a bright office",
+        "abstract": "collaboration teamwork planning",
+        "keywords": ["team", "meeting", "office"],
+        "mood": "energetic",
+    }),
+    ({"revenue", "grew", "growth", "sales", "profit", "financial"}, {
+        "literal": "rising bar chart on a screen",
+        "abstract": "financial growth upward trend profit",
+        "keywords": ["chart", "growth", "revenue"],
+        "mood": "optimistic",
+    }),
+    ({"shipped", "version", "code", "software", "deployment"}, {
+        "literal": "hands typing code on a laptop",
+        "abstract": "software deployment engineering launch",
+        "keywords": ["laptop", "typing", "code"],
+        "mood": "focused",
+    }),
+    ({"frustrated", "checkout", "waiting", "shopper"}, {
+        "literal": "shopper looking at phone waiting in line",
+        "abstract": "impatience delay friction customer frustration",
+        "keywords": ["shopper", "waiting", "phone", "checkout"],
+        "mood": "tense",
+    }),
+    ({"cloud", "infrastructure", "traffic", "server", "scales"}, {
+        "literal": "server racks with blinking lights in data center",
+        "abstract": "cloud scalability high availability network",
+        "keywords": ["server", "datacenter", "cloud", "network"],
+        "mood": "futuristic",
+    }),
+    ({"renewable", "energy", "grid", "wind", "turbines"}, {
+        "literal": "wind turbines spinning on green hills at sunset",
+        "abstract": "clean energy sustainability transition",
+        "keywords": ["wind", "turbines", "energy", "sustainability"],
+        "mood": "inspiring",
+    }),
+    ({"doctors", "doctor", "patient", "scans", "medical", "clinical"}, {
+        "literal": "physician examining medical imaging on tablet",
+        "abstract": "healthcare diagnostics efficiency clinical",
+        "keywords": ["doctor", "medical", "tablet", "diagnostics"],
+        "mood": "calm",
+    }),
+    ({"supply", "chain", "bottlenecks", "shipments", "cargo"}, {
+        "literal": "cargo ship stacked with containers at busy port",
+        "abstract": "logistics congestion freight trade",
+        "keywords": ["cargo", "containers", "port", "logistics"],
+        "mood": "serious",
+    }),
+    ({"remote", "time", "zones", "connected", "videocall"}, {
+        "literal": "woman on video call waving at laptop in home office",
+        "abstract": "remote work global connection communication",
+        "keywords": ["remote", "videocall", "homeoffice", "laptop"],
+        "mood": "warm",
+    }),
+    ({"espresso", "roasted", "coffee", "barista"}, {
+        "literal": "barista pouring steamed milk into coffee cup",
+        "abstract": "artisan craft morning routine",
+        "keywords": ["barista", "coffee", "espresso", "cafe"],
+        "mood": "cozy",
+    }),
+    ({"warehouse", "robots", "parcels", "packages", "automated"}, {
+        "literal": "autonomous robots moving packages on warehouse floor",
+        "abstract": "automation robotics fulfillment speed",
+        "keywords": ["warehouse", "robots", "automation", "packages"],
+        "mood": "dynamic",
+    }),
+    ({"security", "threats", "monitor", "cybersecurity"}, {
+        "literal": "analyst watching multiple monitors in dark control room",
+        "abstract": "cybersecurity vigilance threat monitoring",
+        "keywords": ["cybersecurity", "analyst", "monitors", "security"],
+        "mood": "focused",
+    }),
+    ({"small", "businesses", "doors", "struggled", "shop"}, {
+        "literal": "shop owner flipping sign to closed on glass door",
+        "abstract": "economic hardship downturn resilience",
+        "keywords": ["shop", "closed", "smallbusiness", "owner"],
+        "mood": "somber",
+    }),
+    ({"athletes", "fatigue", "training", "runner", "stairs"}, {
+        "literal": "runner sprinting up stadium stairs at dawn",
+        "abstract": "endurance grit determination discipline",
+        "keywords": ["runner", "training", "stairs", "endurance"],
+        "mood": "intense",
+    }),
+    ({"agriculture", "farmers", "water", "farmland", "drone"}, {
+        "literal": "drone flying over irrigated green farmland",
+        "abstract": "agritech smart farming conservation",
+        "keywords": ["drone", "farmland", "agriculture", "irrigation"],
+        "mood": "calm",
+    }),
+    ({"designers", "mobile", "interfaces", "wireframe", "ux"}, {
+        "literal": "hands arranging wireframe sketches and color swatches on desk",
+        "abstract": "ui ux design prototyping creativity",
+        "keywords": ["design", "wireframe", "ux", "prototyping"],
+        "mood": "creative",
+    }),
+    ({"electric", "vehicles", "combustion", "fleets", "charging"}, {
+        "literal": "electric car plugged into charging station on city street",
+        "abstract": "clean mobility electrification transport",
+        "keywords": ["electric", "charging", "ev", "car"],
+        "mood": "modern",
+    }),
+    ({"students", "interactive", "simulations", "classroom", "vr"}, {
+        "literal": "students wearing vr headsets in modern classroom",
+        "abstract": "edtech immersive learning education",
+        "keywords": ["students", "classroom", "vr", "education"],
+        "mood": "curious",
+    }),
+    ({"biotech", "researchers", "samples", "instruments", "laboratory"}, {
+        "literal": "scientist pipetting liquid into microplate in laboratory",
+        "abstract": "biotechnology genomics research precision",
+        "keywords": ["scientist", "laboratory", "pipette", "biotech"],
+        "mood": "focused",
+    }),
+    ({"families", "outdoors", "weekend", "picnic", "park"}, {
+        "literal": "parents and children sharing picnic on sunny park lawn",
+        "abstract": "togetherness family joy leisure",
+        "keywords": ["family", "picnic", "park", "outdoors"],
+        "mood": "warm",
+    }),
+    ({"outage", "resilience", "incident", "recovery"}, {
+        "literal": "engineers working late under pressure",
+        "abstract": "resilience recovery problem solving",
+        "keywords": ["engineers", "incident", "recovery"],
+        "mood": "determined",
+    }),
+    ({"silos", "synergy", "departments", "alignment"}, {
+        "literal": "two teams meeting across glass bridge",
+        "abstract": "cross functional synergy alignment unity",
+        "keywords": ["teams", "alignment", "bridge"],
+        "mood": "inspiring",
+    }),
+    ({"bureaucracy", "legacy", "organization", "paperwork"}, {
+        "literal": "stacks of paper folders on desk",
+        "abstract": "bureaucracy red tape inefficiency",
+        "keywords": ["paperwork", "folders", "bureaucracy"],
+        "mood": "somber",
+    }),
+    ({"spark", "innovation", "roadmap", "whiteboard"}, {
+        "literal": "founder sketching idea on glass wall",
+        "abstract": "breakthrough innovation inspiration",
+        "keywords": ["founder", "whiteboard", "innovation"],
+        "mood": "energetic",
+    }),
+    ({"trust", "transparency", "reliability", "advisor", "contract"}, {
+        "literal": "advisor reviewing contract with client at table",
+        "abstract": "trust transparency partnership reliability",
+        "keywords": ["advisor", "client", "trust", "partnership"],
+        "mood": "warm",
+    }),
+]
+
+
+def enrich_intent_from_narration(
+    narration: str,
+    intent: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """
+    Enrich a raw or sparse scene intent with concrete visual B-roll `literal`, `abstract`,
+    `keywords`, and `mood` fields derived from the narration text.
+    Preserves any explicit fields already provided in `intent`.
+    """
+    base = dict(intent or {})
+    text = (narration or base.get("literal") or "").strip()
+    tokens = tokenize(text)
+    token_set = set(tokens)
+
+    best_archetype: Optional[dict[str, Any]] = None
+    best_overlap = 0
+    for trigger_words, archetype in _NARRATION_VISUAL_PATTERNS:
+        overlap = len(token_set & trigger_words)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_archetype = archetype
+
+    if best_archetype and best_overlap >= 1:
+        if not base.get("literal") or base.get("literal") == narration.strip():
+            base["literal"] = best_archetype["literal"]
+        if not base.get("abstract"):
+            base["abstract"] = best_archetype["abstract"]
+        if not base.get("keywords"):
+            base["keywords"] = list(best_archetype["keywords"])
+        if not base.get("mood"):
+            base["mood"] = best_archetype["mood"]
+    else:
+        if not base.get("literal"):
+            base["literal"] = text
+        if not base.get("keywords"):
+            visual_kws = [t for t in tokens if len(t) > 2 and t not in _NON_VISUAL_VERBS]
+            base["keywords"] = list(dict.fromkeys(visual_kws))[:5] or tokens[:4]
+        if not base.get("mood"):
+            base["mood"] = "energetic"
+
+    return base
+
+
 def retrieve(
     conn: Any,
     intent: dict[str, Any],
@@ -465,6 +675,7 @@ def retrieve(
     Retrieve top-k candidate shots for a scene intent using:
       (a) pgvector cosine search on the text embedding of the intent,
       (b) full-text search over `search_text` using the intent keywords,
+      (c) optional abstract concept embedding search (`include_abstract=True`),
     fused with `reciprocal_rank_fusion`.
 
     Applies hard filters: orientation, minimum resolution, `quality.has_text`,
@@ -481,10 +692,16 @@ def retrieve(
             reject_has_text=active_filters.reject_has_text,
         )
 
+    enriched_intent = (
+        enrich_intent_from_narration(str(intent.get("literal") or ""), intent)
+        if (include_abstract or not intent.get("keywords"))
+        else intent
+    )
+
     if isinstance(conn, InMemoryShotStore):
         return _retrieve_in_memory(
             conn,
-            intent,
+            enriched_intent,
             k,
             active_embedder,
             active_filters,
@@ -494,7 +711,7 @@ def retrieve(
 
     return _retrieve_postgres(
         conn,
-        intent,
+        enriched_intent,
         k,
         active_embedder,
         active_filters,

@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { canOverwrite, secToUs, usToSec, type Clip, type Project } from "@vf/schema";
-import { STOCK_CATALOG } from "../generator";
+import { getAllCatalogSpecs } from "../generator";
+import { onMediaCacheUpdated, resolveAssetThumbnailUrl } from "../mediaCache";
 import { useEditor } from "../store";
 import { parseWaveformPeaksUri } from "../tts";
 
@@ -15,7 +16,7 @@ function clipLabel(c: Clip, project: Project): string {
       const scene = c.sceneId ? project.scenes.find((s) => s.id === c.sceneId) : undefined;
       return `Kokoro (${parsed.voice}) — ${scene?.narration ?? c.id}`;
     }
-    const spec = STOCK_CATALOG.find((s) => s.assetId === c.source?.assetId);
+    const spec = getAllCatalogSpecs().find((s) => s.assetId === c.source?.assetId);
     return spec ? spec.title : c.source.assetId;
   }
   return c.id;
@@ -31,9 +32,23 @@ interface DragState {
 }
 
 export function Timeline() {
-  const { project, pxPerSec, selection, select, playhead, setPlayhead, setPlaying, dispatch } = useEditor();
+  const {
+    project,
+    pxPerSec,
+    selection,
+    selectClipAndOpenPanel,
+    playhead,
+    setPlayhead,
+    setPlaying,
+    dispatch,
+  } = useEditor();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [, setMediaTick] = useState(0);
+
+  useEffect(() => {
+    return onMediaCacheUpdated(() => setMediaTick((n) => n + 1));
+  }, []);
 
   const x = (us: number) => usToSec(us) * pxPerSec;
 
@@ -93,7 +108,7 @@ export function Timeline() {
     mode: "move" | "trim-in" | "trim-out",
   ) => {
     e.stopPropagation();
-    select([clip.id]);
+    selectClipAndOpenPanel(clip.id);
     const track = project.tracks.find((t) => t.id === clip.trackId);
     if (track?.locked || clip.provenance.locked) return;
 
@@ -301,18 +316,23 @@ export function Timeline() {
 
                 const asset = c.source ? project.assets[c.source.assetId] : undefined;
                 const parsedWave = parseWaveformPeaksUri(asset?.waveformPeaksUri);
+                const isVisualMediaClip =
+                  c.kind === "media" && t.kind === "video" && asset?.type !== "audio";
+                const thumbUrl = isVisualMediaClip
+                  ? resolveAssetThumbnailUrl(c.source?.assetId)
+                  : undefined;
 
                 return (
                   <div
                     key={c.id}
                     role="button"
                     tabIndex={0}
-                    className="vf-clip-block"
+                    className={`vf-clip-block ${isSelected ? "is-selected" : ""}`}
                     onPointerDown={(e) => startClipDrag(e, c, "move")}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        select([c.id]);
+                        selectClipAndOpenPanel(c.id);
                       }
                     }}
                     style={{
@@ -323,7 +343,9 @@ export function Timeline() {
                       background: bg,
                       boxShadow: isSelected ? "0 0 0 2px rgba(56, 189, 248, 0.25)" : "0 2px 6px rgba(0,0,0,0.35)",
                     }}
-                    title={`${c.id} (${statusTag}) — ${usToSec(displayStart).toFixed(2)}s..${usToSec(displayStart + displayDuration).toFixed(2)}s (drag to move, drag edges to trim)`}
+                    title={`${clipLabel(c, project)} (${statusTag}) — click to open ${
+                      t.kind === "audio" ? "Voice" : t.kind === "text" ? "Text" : "Clip & Stock"
+                    } panel`}
                   >
                     {parsedWave && (
                       <div
@@ -356,6 +378,15 @@ export function Timeline() {
                       title="Drag left edge to trim In-point"
                       onPointerDown={(e) => startClipDrag(e, c, "trim-in")}
                     />
+                    {thumbUrl && (
+                      <img
+                        src={thumbUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="vf-clip-thumb"
+                      />
+                    )}
                     <strong style={{ color: overwritable ? "#7dd3fc" : "#fcd34d", fontSize: 10, position: "relative" }}>
                       [{statusTag}]
                     </strong>

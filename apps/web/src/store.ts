@@ -30,6 +30,8 @@ export interface EditEventRecord {
 
 export type SyncStatus = "synced" | "syncing" | "local";
 
+export type SidebarPanelId = "script" | "scenes" | "clip" | "voice" | "text" | "history";
+
 export const DEFAULT_SCRIPT = [
   "Our team starts every morning with a quick planning session.",
   "Revenue grew steadily throughout the year.",
@@ -63,6 +65,7 @@ interface EditorState {
   past: HistoryEntry[];
   future: HistoryEntry[];
   selection: string[];
+  activePanel: SidebarPanelId | null;
   playhead: number; // microseconds
   playing: boolean;
   pxPerSec: number;
@@ -78,6 +81,8 @@ interface EditorState {
   undo: () => void;
   redo: () => void;
   select: (ids: string[]) => void;
+  setActivePanel: (panel: SidebarPanelId | null) => void;
+  selectClipAndOpenPanel: (clipId: string) => void;
   setPlayhead: (t: number) => void;
   setPlaying: (v: boolean | ((prev: boolean) => boolean)) => void;
   setPxPerSec: (px: number) => void;
@@ -93,6 +98,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   past: [],
   future: [],
   selection: [],
+  activePanel: "script",
   playhead: 0,
   playing: false,
   pxPerSec: 80,
@@ -292,7 +298,34 @@ export const useEditor = create<EditorState>((set, get) => ({
     }
   },
 
-  select: (ids) => set({ selection: ids }),
+  select: (ids) => {
+    const firstId = ids[0];
+    const clip = firstId ? get().project.clips[firstId] : undefined;
+    if (clip) {
+      const asset = clip.source ? get().project.assets[clip.source.assetId] : undefined;
+      const isVoice =
+        clip.trackId === "a1" || clip.id.startsWith("ai_vo_") || asset?.type === "audio";
+      const isText = clip.kind === "text" || clip.trackId === "t1";
+      const nextPanel: SidebarPanelId = isVoice ? "voice" : isText ? "text" : "clip";
+      set({ selection: ids, activePanel: nextPanel });
+    } else {
+      set({ selection: ids });
+    }
+  },
+  setActivePanel: (panel) => set({ activePanel: panel }),
+  selectClipAndOpenPanel: (clipId) => {
+    const clip = get().project.clips[clipId];
+    if (!clip) {
+      set({ selection: [clipId] });
+      return;
+    }
+    const asset = clip.source ? get().project.assets[clip.source.assetId] : undefined;
+    const isVoice =
+      clip.trackId === "a1" || clip.id.startsWith("ai_vo_") || asset?.type === "audio";
+    const isText = clip.kind === "text" || clip.trackId === "t1";
+    const nextPanel: SidebarPanelId = isVoice ? "voice" : isText ? "text" : "clip";
+    set({ selection: [clipId], activePanel: nextPanel });
+  },
   setPlayhead: (t) => set({ playhead: Math.max(0, Math.round(t)) }),
   setPlaying: (v) => set((s) => ({ playing: typeof v === "function" ? v(s.playing) : v })),
   setPxPerSec: (px) => set({ pxPerSec: Math.max(30, Math.min(240, Math.round(px))) }),

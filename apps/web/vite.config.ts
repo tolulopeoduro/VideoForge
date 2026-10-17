@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import os from "node:os";
@@ -10,6 +11,10 @@ interface StoredAssetMeta {
   mimeType: string;
   fileName: string;
   remoteUrl?: string;
+  proxyUrl?: string;
+  proxyPath?: string;
+  thumbUrl?: string;
+  thumbPath?: string;
 }
 
 interface StoredEditEvent {
@@ -45,6 +50,7 @@ export interface StockCandidateItem {
   height: number;
   uri: string;
   previewThumbUrl?: string;
+  qualityScore?: number;
   license: {
     provider: "pixabay" | "wikimedia";
     providerId: string;
@@ -127,14 +133,108 @@ function sendJson(res: ServerResponse, statusCode: number, data: unknown): void 
   res.end(payload);
 }
 
-async function ensureAssetCachedOnDisk(meta: StoredAssetMeta): Promise<boolean> {
-  if (fs.existsSync(meta.filePath) && fs.statSync(meta.filePath).size > 0) {
-    return true;
+function normalizeAssetMeta(dataDir: string, assetId: string, meta: StoredAssetMeta): StoredAssetMeta {
+  const ext = path.extname(meta.fileName || meta.filePath) || (meta.mimeType.startsWith("video/") ? ".mp4" : ".jpg");
+  if (!meta.proxyPath) {
+    meta.proxyPath = path.join(dataDir, "proxies", `${assetId}_proxy${ext}`);
   }
-  if (!meta.remoteUrl) return false;
+  if (!meta.thumbPath) {
+    meta.thumbPath = path.join(dataDir, "thumbs", `${assetId}.jpg`);
+  }
+  if (!meta.proxyUrl && meta.remoteUrl) {
+    meta.proxyUrl = meta.remoteUrl;
+  }
+  return meta;
+}
+
+async function recoverPixabayAssetMeta(
+  dataDir: string,
+  store: DiskStoreData,
+  assetId: string,
+  apiKey: string | null,
+): Promise<StoredAssetMeta | undefined> {
+  if (!apiKey) return store.assets[assetId];
   try {
-    fs.mkdirSync(path.dirname(meta.filePath), { recursive: true });
-    const resp = await fetch(meta.remoteUrl, {
+    if (assetId.startsWith("pxv_")) {
+      const id = assetId.slice(4);
+      const resp = await fetch(
+        `https://pixabay.com/api/videos/?key=${encodeURIComponent(apiKey)}&id=${encodeURIComponent(id)}`,
+      );
+      if (!resp.ok) return store.assets[assetId];
+      const data = (await resp.json()) as {
+        hits?: Array<{
+          videos?: {
+            tiny?: { url?: string; thumbnail?: string };
+            small?: { url?: string; thumbnail?: string };
+            medium?: { url?: string; thumbnail?: string };
+            large?: { url?: string; thumbnail?: string };
+          };
+        }>;
+      };
+      const hit = data.hits?.[0];
+      const proxyVar = hit?.videos?.tiny?.url ? hit.videos.tiny : hit?.videos?.small;
+      const exportVar = hit?.videos?.medium?.url
+        ? hit.videos.medium
+        : hit?.videos?.large?.url
+          ? hit.videos.large
+          : proxyVar;
+      if (proxyVar?.url && exportVar?.url) {
+        const meta: StoredAssetMeta = {
+          filePath: path.join(dataDir, "uploads", `${assetId}.mp4`),
+          mimeType: "video/mp4",
+          fileName: `${assetId}.mp4`,
+          remoteUrl: exportVar.url,
+          proxyUrl: proxyVar.url,
+          proxyPath: path.join(dataDir, "proxies", `${assetId}_proxy.mp4`),
+          thumbUrl: proxyVar.thumbnail || exportVar.thumbnail,
+          thumbPath: path.join(dataDir, "thumbs", `${assetId}.jpg`),
+        };
+        store.assets[assetId] = meta;
+        writeDiskStore(dataDir, store);
+        return meta;
+      }
+    } else if (assetId.startsWith("pxi_")) {
+      const id = assetId.slice(4);
+      const resp = await fetch(
+        `https://pixabay.com/api/?key=${encodeURIComponent(apiKey)}&id=${encodeURIComponent(id)}`,
+      );
+      if (!resp.ok) return store.assets[assetId];
+      const data = (await resp.json()) as {
+        hits?: Array<{
+          largeImageURL?: string;
+          webformatURL?: string;
+          previewURL?: string;
+        }>;
+      };
+      const hit = data.hits?.[0];
+      const exportUrl = hit?.largeImageURL || hit?.webformatURL;
+      const proxyUrl = hit?.webformatURL ? hit.webformatURL.replace("_640.", "_340.") : exportUrl;
+      if (exportUrl) {
+        const meta: StoredAssetMeta = {
+          filePath: path.join(dataDir, "uploads", `${assetId}.jpg`),
+          mimeType: "image/jpeg",
+          fileName: `${assetId}.jpg`,
+          remoteUrl: exportUrl,
+          proxyUrl: proxyUrl || exportUrl,
+          proxyPath: path.join(dataDir, "proxies", `${assetId}_proxy.jpg`),
+          thumbUrl: hit?.previewURL || proxyUrl || exportUrl,
+          thumbPath: path.join(dataDir, "thumbs", `${assetId}.jpg`),
+        };
+        store.assets[assetId] = meta;
+        writeDiskStore(dataDir, store);
+        return meta;
+      }
+    }
+  } catch {
+    // ignore recovery network errors
+  }
+  return store.assets[assetId];
+}
+
+async function downloadUrlToFile(url: string, targetPath: string): Promise<boolean> {
+  try {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    const resp = await fetch(url, {
       headers: {
         "User-Agent": "VideoForgeStudio/1.0 (https://localhost; dev@videoforge.local)",
       },
@@ -142,21 +242,114 @@ async function ensureAssetCachedOnDisk(meta: StoredAssetMeta): Promise<boolean> 
     if (!resp.ok) return false;
     const arr = await resp.arrayBuffer();
     if (arr.byteLength === 0) return false;
-    fs.writeFileSync(meta.filePath, Buffer.from(arr));
+    fs.writeFileSync(targetPath, Buffer.from(arr));
     return true;
   } catch {
     return false;
   }
 }
 
+async function ensureAssetCachedOnDisk(
+  meta: StoredAssetMeta,
+  opts?: { dataDir: string; store: DiskStoreData; assetId: string; apiKey: string | null },
+): Promise<boolean> {
+  if (fs.existsSync(meta.filePath) && fs.statSync(meta.filePath).size > 0) {
+    return true;
+  }
+  if (meta.remoteUrl && (await downloadUrlToFile(meta.remoteUrl, meta.filePath))) {
+    return true;
+  }
+  if (opts) {
+    const recovered = await recoverPixabayAssetMeta(opts.dataDir, opts.store, opts.assetId, opts.apiKey);
+    if (recovered?.remoteUrl && (await downloadUrlToFile(recovered.remoteUrl, recovered.filePath))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function ensureProxyCachedOnDisk(
+  meta: StoredAssetMeta,
+  opts?: { dataDir: string; store: DiskStoreData; assetId: string; apiKey: string | null },
+): Promise<string | null> {
+  if (opts) {
+    normalizeAssetMeta(opts.dataDir, opts.assetId, meta);
+  }
+  if (meta.proxyPath && fs.existsSync(meta.proxyPath) && fs.statSync(meta.proxyPath).size > 0) {
+    return meta.proxyPath;
+  }
+  if (fs.existsSync(meta.filePath) && fs.statSync(meta.filePath).size > 0) {
+    return meta.filePath;
+  }
+  const sourceUrl = meta.proxyUrl || meta.remoteUrl;
+  if (sourceUrl && meta.proxyPath && (await downloadUrlToFile(sourceUrl, meta.proxyPath))) {
+    return meta.proxyPath;
+  }
+  if (opts) {
+    const recovered = await recoverPixabayAssetMeta(opts.dataDir, opts.store, opts.assetId, opts.apiKey);
+    const recUrl = recovered?.proxyUrl || recovered?.remoteUrl;
+    if (recovered?.proxyPath && recUrl && (await downloadUrlToFile(recUrl, recovered.proxyPath))) {
+      return recovered.proxyPath;
+    }
+  }
+  return null;
+}
+
+async function ensureThumbCachedOnDisk(
+  meta: StoredAssetMeta,
+  opts?: { dataDir: string; store: DiskStoreData; assetId: string; apiKey: string | null },
+): Promise<string | null> {
+  if (opts) {
+    normalizeAssetMeta(opts.dataDir, opts.assetId, meta);
+  }
+  if (meta.thumbPath && fs.existsSync(meta.thumbPath) && fs.statSync(meta.thumbPath).size > 0) {
+    return meta.thumbPath;
+  }
+  if (meta.mimeType.startsWith("image/")) {
+    if (meta.proxyPath && fs.existsSync(meta.proxyPath) && fs.statSync(meta.proxyPath).size > 0) {
+      return meta.proxyPath;
+    }
+    if (fs.existsSync(meta.filePath) && fs.statSync(meta.filePath).size > 0) {
+      return meta.filePath;
+    }
+  }
+  const sourceUrl = meta.thumbUrl || (meta.mimeType.startsWith("image/") ? meta.proxyUrl || meta.remoteUrl : undefined);
+  if (sourceUrl && meta.thumbPath && (await downloadUrlToFile(sourceUrl, meta.thumbPath))) {
+    return meta.thumbPath;
+  }
+  if (opts) {
+    const recovered = await recoverPixabayAssetMeta(opts.dataDir, opts.store, opts.assetId, opts.apiKey);
+    const recUrl =
+      recovered?.thumbUrl ||
+      (recovered?.mimeType.startsWith("image/") ? recovered.proxyUrl || recovered.remoteUrl : undefined);
+    if (recovered?.thumbPath && recUrl && (await downloadUrlToFile(recUrl, recovered.thumbPath))) {
+      return recovered.thumbPath;
+    }
+  }
+  // Fallback for video assets: extract frame 0 from cached proxy or full video via ffmpeg
+  if (meta.mimeType.startsWith("video/") && meta.thumbPath) {
+    const videoFile =
+      (meta.proxyPath && fs.existsSync(meta.proxyPath) ? meta.proxyPath : null) ||
+      (fs.existsSync(meta.filePath) ? meta.filePath : null);
+    if (videoFile) {
+      fs.mkdirSync(path.dirname(meta.thumbPath), { recursive: true });
+      spawnSync("ffmpeg", ["-y", "-v", "error", "-i", videoFile, "-frames:v", "1", "-vf", "scale=320:-1", meta.thumbPath]);
+      if (fs.existsSync(meta.thumbPath) && fs.statSync(meta.thumbPath).size > 0) {
+        return meta.thumbPath;
+      }
+    }
+  }
+  return null;
+}
+
 async function searchPixabayVideos(
   apiKey: string,
   query: string,
   mood: string,
-): Promise<Array<{ item: StockCandidateItem; remoteUrl: string; mimeType: string; ext: string }>> {
+): Promise<Array<{ item: StockCandidateItem; remoteUrl: string; proxyUrl: string; mimeType: string; ext: string }>> {
   const url = `https://pixabay.com/api/videos/?key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(
     query,
-  )}&safesearch=true&per_page=5`;
+  )}&safesearch=true&per_page=8`;
   const resp = await fetch(url);
   if (!resp.ok) return [];
   const data = (await resp.json()) as {
@@ -165,27 +358,50 @@ async function searchPixabayVideos(
       tags?: string;
       duration?: number;
       user?: string;
+      views?: number;
+      likes?: number;
+      downloads?: number;
       videos?: {
         tiny?: { url?: string; width?: number; height?: number; thumbnail?: string };
         small?: { url?: string; width?: number; height?: number; thumbnail?: string };
         medium?: { url?: string; width?: number; height?: number; thumbnail?: string };
+        large?: { url?: string; width?: number; height?: number; thumbnail?: string };
       };
     }>;
   };
-  const out: Array<{ item: StockCandidateItem; remoteUrl: string; mimeType: string; ext: string }> = [];
+  const out: Array<{ item: StockCandidateItem; remoteUrl: string; proxyUrl: string; mimeType: string; ext: string }> = [];
   for (const hit of data.hits ?? []) {
-    const vidVariant = hit.videos?.tiny?.url ? hit.videos.tiny : hit.videos?.small;
-    if (!vidVariant?.url) continue;
+    // Low-resolution editing proxy (360p tiny stream) vs High-resolution export video (720p/1080p medium/large stream)
+    const proxyVariant = hit.videos?.tiny?.url ? hit.videos.tiny : hit.videos?.small;
+    const exportVariant =
+      hit.videos?.medium?.url
+        ? hit.videos.medium
+        : hit.videos?.large?.url
+          ? hit.videos.large
+          : hit.videos?.small?.url
+            ? hit.videos.small
+            : proxyVariant;
+    if (!proxyVariant?.url || !exportVariant?.url) continue;
+    const width = exportVariant.width || 1280;
+    const height = exportVariant.height || 720;
+    // Filter out portrait/vertical clips for 16:9 landscape projects
+    if (width < height) continue;
+
     const tags = (hit.tags ?? "")
       .split(",")
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
     const assetId = `pxv_${hit.id}`;
-    const labelTag = tags.slice(0, 2).join(" • ") || "video";
+    const labelTag = tags.slice(0, 3).join(" • ") || "video";
+    const popularityBonus = Math.min(0.15, Math.log10(Math.max(1, (hit.likes ?? 0) + (hit.downloads ?? 0))) * 0.03);
+    const hdBonus = width >= 1280 ? 0.1 : 0;
+    const qualityScore = Number(Math.min(0.98, 0.72 + popularityBonus + hdBonus).toFixed(3));
+
     out.push({
       ext: ".mp4",
       mimeType: "video/mp4",
-      remoteUrl: vidVariant.url,
+      remoteUrl: exportVariant.url,
+      proxyUrl: proxyVariant.url,
       item: {
         assetId,
         title: `Pixabay Video: ${labelTag}`,
@@ -194,10 +410,11 @@ async function searchPixabayVideos(
         mood,
         kind: "video",
         durationUs: Math.max(30_000_000, Math.round((hit.duration ?? 10) * 1_000_000)),
-        width: vidVariant.width || 960,
-        height: vidVariant.height || 540,
+        width,
+        height,
         uri: `s3://vf/stock/${assetId}.mp4`,
-        previewThumbUrl: vidVariant.thumbnail,
+        previewThumbUrl: proxyVariant.thumbnail || exportVariant.thumbnail,
+        qualityScore,
         license: {
           provider: "pixabay",
           providerId: String(hit.id),
@@ -214,10 +431,10 @@ async function searchPixabayPhotos(
   apiKey: string,
   query: string,
   mood: string,
-): Promise<Array<{ item: StockCandidateItem; remoteUrl: string; mimeType: string; ext: string }>> {
+): Promise<Array<{ item: StockCandidateItem; remoteUrl: string; proxyUrl: string; mimeType: string; ext: string }>> {
   const url = `https://pixabay.com/api/?key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(
     query,
-  )}&image_type=photo&orientation=horizontal&safesearch=true&per_page=5`;
+  )}&image_type=photo&orientation=horizontal&min_width=1280&safesearch=true&per_page=8`;
   const resp = await fetch(url);
   if (!resp.ok) return [];
   const data = (await resp.json()) as {
@@ -225,25 +442,41 @@ async function searchPixabayPhotos(
       id: number;
       tags?: string;
       user?: string;
+      likes?: number;
+      downloads?: number;
+      largeImageURL?: string;
       webformatURL?: string;
       previewURL?: string;
+      imageWidth?: number;
+      imageHeight?: number;
       webformatWidth?: number;
       webformatHeight?: number;
     }>;
   };
-  const out: Array<{ item: StockCandidateItem; remoteUrl: string; mimeType: string; ext: string }> = [];
+  const out: Array<{ item: StockCandidateItem; remoteUrl: string; proxyUrl: string; mimeType: string; ext: string }> = [];
   for (const hit of data.hits ?? []) {
     if (!hit.webformatURL) continue;
+    const width = hit.imageWidth || hit.webformatWidth || 1280;
+    const height = hit.imageHeight || hit.webformatHeight || 720;
+    if (width < height) continue;
+
     const tags = (hit.tags ?? "")
       .split(",")
       .map((t) => t.trim().toLowerCase())
       .filter(Boolean);
     const assetId = `pxi_${hit.id}`;
-    const labelTag = tags.slice(0, 2).join(" • ") || "photo";
+    const labelTag = tags.slice(0, 3).join(" • ") || "photo";
+    // Low-res editing proxy (340p/640p webformat) vs Full-res export (1280p largeImageURL)
+    const proxyUrl = hit.webformatURL.replace("_640.", "_340.");
+    const remoteUrl = hit.largeImageURL || hit.webformatURL;
+    const popularityBonus = Math.min(0.14, Math.log10(Math.max(1, (hit.likes ?? 0) + (hit.downloads ?? 0))) * 0.03);
+    const qualityScore = Number(Math.min(0.95, 0.75 + popularityBonus).toFixed(3));
+
     out.push({
       ext: ".jpg",
       mimeType: "image/jpeg",
-      remoteUrl: hit.webformatURL,
+      remoteUrl,
+      proxyUrl,
       item: {
         assetId,
         title: `Pixabay Photo: ${labelTag}`,
@@ -255,7 +488,8 @@ async function searchPixabayPhotos(
         width: hit.webformatWidth || 1280,
         height: hit.webformatHeight || 720,
         uri: `s3://vf/stock/${assetId}.jpg`,
-        previewThumbUrl: hit.previewURL,
+        previewThumbUrl: hit.previewURL || proxyUrl,
+        qualityScore,
         license: {
           provider: "pixabay",
           providerId: String(hit.id),
@@ -268,13 +502,16 @@ async function searchPixabayPhotos(
   return out;
 }
 
+const WIKIMEDIA_REJECT_TITLE_RE =
+  /\b(diagram|chart|map|icon|logo|scan|page|document|flag|coat of arms|signature|graph|table|schema|vector|stamp|seal|book|pdf|svg)\b/i;
+
 async function searchWikimediaPhotos(
   query: string,
   mood: string,
-): Promise<Array<{ item: StockCandidateItem; remoteUrl: string; mimeType: string; ext: string }>> {
+): Promise<Array<{ item: StockCandidateItem; remoteUrl: string; proxyUrl: string; mimeType: string; ext: string }>> {
   const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(
     `filetype:bitmap ${query}`,
-  )}&gsrnamespace=6&gsrlimit=4&prop=imageinfo&iiprop=url|dimensions|mime|extmetadata&iiurlwidth=1280&format=json`;
+  )}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url|dimensions|mime|extmetadata&iiurlwidth=640&format=json`;
   const resp = await fetch(url, {
     headers: {
       "User-Agent": "VideoForgeStudio/1.0 (https://localhost; dev@videoforge.local)",
@@ -297,6 +534,8 @@ async function searchWikimediaPhotos(
             extmetadata?: {
               LicenseShortName?: { value?: string };
               Artist?: { value?: string };
+              ImageDescription?: { value?: string };
+              ObjectName?: { value?: string };
             };
           }>;
         }
@@ -304,16 +543,30 @@ async function searchWikimediaPhotos(
     };
   };
   const pages = Object.values(data.query?.pages ?? {});
-  const out: Array<{ item: StockCandidateItem; remoteUrl: string; mimeType: string; ext: string }> = [];
+  const out: Array<{ item: StockCandidateItem; remoteUrl: string; proxyUrl: string; mimeType: string; ext: string }> = [];
   for (const page of pages) {
     const ii = page.imageinfo?.[0];
-    const remoteUrl = ii?.thumburl || ii?.url;
-    if (!remoteUrl) continue;
-    const cleanTitle = (page.title ?? `Wikimedia ${page.pageid}`)
-      .replace(/^File:/i, "")
-      .replace(/\.[a-zA-Z0-9]+$/, "")
-      .slice(0, 36);
-    const words = (cleanTitle.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length > 2);
+    const remoteUrl = ii?.url || ii?.thumburl;
+    const proxyUrl = ii?.thumburl || ii?.url;
+    if (!remoteUrl || !proxyUrl) continue;
+    const width = ii?.width || 1280;
+    const height = ii?.height || 720;
+    // Reject portrait scans, low-res thumbnails, or non-photographic diagrams/logos
+    if (width < height || width < 800) continue;
+
+    const rawTitle = (page.title ?? `Wikimedia ${page.pageid}`).replace(/^File:/i, "");
+    if (WIKIMEDIA_REJECT_TITLE_RE.test(rawTitle)) continue;
+
+    const cleanTitle = rawTitle.replace(/\.[a-zA-Z0-9]+$/, "").slice(0, 42);
+    const rawDesc = (ii?.extmetadata?.ImageDescription?.value ?? ii?.extmetadata?.ObjectName?.value ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const words = (`${cleanTitle} ${rawDesc}`.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter(
+      (w) => w.length > 2,
+    );
+    const uniqueWords = Array.from(new Set(words)).slice(0, 10);
     const assetId = `wiki_${page.pageid}`;
     const isPng = (ii?.mime ?? "").includes("png") || remoteUrl.toLowerCase().endsWith(".png");
     const ext = isPng ? ".png" : ".jpg";
@@ -321,18 +574,20 @@ async function searchWikimediaPhotos(
       ext,
       mimeType: isPng ? "image/png" : "image/jpeg",
       remoteUrl,
+      proxyUrl,
       item: {
         assetId,
         title: `Wikimedia: ${cleanTitle}`,
-        caption: `wikimedia commons ${cleanTitle} ${query}`,
-        tags: words.length > 0 ? words.slice(0, 8) : ["wikimedia", "commons"],
+        caption: `wikimedia commons ${cleanTitle} ${rawDesc} ${query}`.trim(),
+        tags: uniqueWords.length > 0 ? uniqueWords : ["wikimedia", "commons"],
         mood,
         kind: "image",
         durationUs: 30_000_000,
-        width: ii?.width || 1280,
-        height: ii?.height || 720,
+        width,
+        height,
         uri: `s3://vf/stock/${assetId}${ext}`,
-        previewThumbUrl: ii?.thumburl,
+        previewThumbUrl: proxyUrl,
+        qualityScore: width >= 1280 ? 0.78 : 0.68,
         license: {
           provider: "wikimedia",
           providerId: String(page.pageid),
@@ -345,12 +600,26 @@ async function searchWikimediaPhotos(
   return out;
 }
 
+function dedupeHits<T extends { item: { assetId: string } }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const entry of items) {
+    if (!seen.has(entry.item.assetId)) {
+      seen.add(entry.item.assetId);
+      out.push(entry);
+    }
+  }
+  return out;
+}
+
 function videoforgeStudioPlugin(): Plugin {
   return {
     name: "videoforge-studio-api",
     configureServer(server) {
       const dataDir = getDataDir(server.config.root);
       const uploadsDir = path.join(dataDir, "uploads");
+      const proxiesDir = path.join(dataDir, "proxies");
+      const thumbsDir = path.join(dataDir, "thumbs");
 
       server.middlewares.use(async (req, res, next) => {
         const url = (req.url ?? "").split("?")[0] ?? "";
@@ -360,11 +629,12 @@ function videoforgeStudioPlugin(): Plugin {
         }
 
         try {
-          // 0. POST /api/stock/search (Live Pixabay Videos/Photos + Wikimedia Commons)
+          // 0. POST /api/stock/search (Live Pixabay Videos/Photos + Wikimedia Commons with multi-query cascade)
           if (url === "/api/stock/search" && req.method === "POST") {
             const raw = (await readBodyBuffer(req)).toString("utf8");
             const body = JSON.parse(raw) as {
-              query: string;
+              query?: string;
+              queries?: string[];
               fallbackQuery?: string;
               mood?: string;
               mediaMode?: "videos_and_photos" | "videos_only" | "photos_only" | "wikimedia_only";
@@ -372,9 +642,17 @@ function videoforgeStudioPlugin(): Plugin {
             };
             const q = (body.query || "business").trim();
             const fallbackQ = (body.fallbackQuery || q.split(/\s+/)[0] || "technology").trim();
+            const queryCascade = Array.from(
+              new Set([
+                ...(Array.isArray(body.queries) ? body.queries.map((s) => s.trim()).filter(Boolean) : []),
+                q,
+                fallbackQ,
+              ]),
+            ).slice(0, 3);
             const mood = body.mood || "energetic";
             const mediaMode = body.mediaMode ?? "videos_and_photos";
-            const cacheTopN = typeof body.cacheTopN === "number" ? body.cacheTopN : 1;
+            // Default cacheTopN = 0: do not block search on full-res video/image downloads; full files download on export
+            const cacheTopN = typeof body.cacheTopN === "number" ? body.cacheTopN : 0;
             const pixabayKey = readEnvKey(server.config.root, "PIXABAY_API_KEY");
 
             let videoHits: Awaited<ReturnType<typeof searchPixabayVideos>> = [];
@@ -386,10 +664,13 @@ function videoforgeStudioPlugin(): Plugin {
             if (pixabayKey && (mediaMode === "videos_and_photos" || mediaMode === "videos_only")) {
               tasks.push(
                 (async () => {
-                  videoHits = await searchPixabayVideos(pixabayKey, q, mood);
-                  if (videoHits.length === 0 && fallbackQ !== q) {
-                    videoHits = await searchPixabayVideos(pixabayKey, fallbackQ, mood);
+                  const collected: Awaited<ReturnType<typeof searchPixabayVideos>> = [];
+                  for (const candidateQ of queryCascade) {
+                    const hits = await searchPixabayVideos(pixabayKey, candidateQ, mood);
+                    collected.push(...hits);
+                    if (dedupeHits(collected).length >= 5) break;
                   }
+                  videoHits = dedupeHits(collected);
                 })(),
               );
             }
@@ -397,10 +678,13 @@ function videoforgeStudioPlugin(): Plugin {
             if (pixabayKey && (mediaMode === "videos_and_photos" || mediaMode === "photos_only")) {
               tasks.push(
                 (async () => {
-                  photoHits = await searchPixabayPhotos(pixabayKey, q, mood);
-                  if (photoHits.length === 0 && fallbackQ !== q) {
-                    photoHits = await searchPixabayPhotos(pixabayKey, fallbackQ, mood);
+                  const collected: Awaited<ReturnType<typeof searchPixabayPhotos>> = [];
+                  for (const candidateQ of queryCascade) {
+                    const hits = await searchPixabayPhotos(pixabayKey, candidateQ, mood);
+                    collected.push(...hits);
+                    if (dedupeHits(collected).length >= 5) break;
                   }
+                  photoHits = dedupeHits(collected);
                 })(),
               );
             }
@@ -412,10 +696,13 @@ function videoforgeStudioPlugin(): Plugin {
             ) {
               tasks.push(
                 (async () => {
-                  wikiHits = await searchWikimediaPhotos(q, mood);
-                  if (wikiHits.length === 0 && fallbackQ !== q) {
-                    wikiHits = await searchWikimediaPhotos(fallbackQ, mood);
+                  const collected: Awaited<ReturnType<typeof searchWikimediaPhotos>> = [];
+                  for (const candidateQ of queryCascade) {
+                    const hits = await searchWikimediaPhotos(candidateQ, mood);
+                    collected.push(...hits);
+                    if (dedupeHits(collected).length >= 4) break;
                   }
+                  wikiHits = dedupeHits(collected);
                 })(),
               );
             }
@@ -423,41 +710,63 @@ function videoforgeStudioPlugin(): Plugin {
             await Promise.all(tasks);
 
             // Interleave results so videos and photos from both Pixabay and Wikimedia are represented
-            const combined: Array<{
-              item: StockCandidateItem;
-              remoteUrl: string;
-              mimeType: string;
-              ext: string;
-            }> = [];
-            const maxLen = Math.max(videoHits.length, photoHits.length, wikiHits.length);
-            for (let i = 0; i < maxLen; i++) {
-              if (videoHits[i]) combined.push(videoHits[i]!);
-              if (photoHits[i]) combined.push(photoHits[i]!);
-              if (wikiHits[i]) combined.push(wikiHits[i]!);
-            }
+            const combined = dedupeHits(
+              (() => {
+                const list: Array<{
+                  item: StockCandidateItem;
+                  remoteUrl: string;
+                  proxyUrl: string;
+                  mimeType: string;
+                  ext: string;
+                }> = [];
+                const maxLen = Math.max(videoHits.length, photoHits.length, wikiHits.length);
+                for (let i = 0; i < maxLen; i++) {
+                  if (videoHits[i]) list.push(videoHits[i]!);
+                  if (photoHits[i]) list.push(photoHits[i]!);
+                  if (wikiHits[i]) list.push(wikiHits[i]!);
+                }
+                return list;
+              })(),
+            );
 
             fs.mkdirSync(uploadsDir, { recursive: true });
+            fs.mkdirSync(proxiesDir, { recursive: true });
+            fs.mkdirSync(thumbsDir, { recursive: true });
             const store = readDiskStore(dataDir);
             for (const entry of combined) {
               const fileName = `${entry.item.assetId}${entry.ext}`;
               const filePath = path.join(uploadsDir, fileName);
+              const proxyPath = path.join(proxiesDir, `${entry.item.assetId}_proxy${entry.ext}`);
+              const thumbPath = path.join(thumbsDir, `${entry.item.assetId}.jpg`);
               store.assets[entry.item.assetId] = {
                 filePath,
                 mimeType: entry.mimeType,
                 fileName,
                 remoteUrl: entry.remoteUrl,
+                proxyUrl: entry.proxyUrl,
+                proxyPath,
+                thumbUrl: entry.item.previewThumbUrl,
+                thumbPath,
               };
             }
             writeDiskStore(dataDir, store);
 
-            // Eagerly download and cache the top N items on disk so immediate preview & export work
-            const toCache = combined.slice(0, Math.max(0, cacheTopN));
-            await Promise.all(
-              toCache.map((c) => {
-                const meta = store.assets[c.item.assetId];
-                return meta ? ensureAssetCachedOnDisk(meta) : Promise.resolve(false);
-              }),
-            );
+            if (cacheTopN > 0) {
+              const toCache = combined.slice(0, cacheTopN);
+              await Promise.all(
+                toCache.map((c) => {
+                  const meta = store.assets[c.item.assetId];
+                  return meta
+                    ? ensureAssetCachedOnDisk(meta, {
+                        dataDir,
+                        store,
+                        assetId: c.item.assetId,
+                        apiKey: pixabayKey,
+                      })
+                    : Promise.resolve(false);
+                }),
+              );
+            }
 
             sendJson(res, 200, {
               hasPixabayKey: Boolean(pixabayKey),
@@ -495,17 +804,113 @@ function videoforgeStudioPlugin(): Plugin {
             return;
           }
 
-          // 2. GET /api/assets/:id/file (serves uploaded or on-demand cached stock files)
-          const assetMatch = url.match(/^\/api\/assets\/([^/]+)\/file$/);
-          if (assetMatch && req.method === "GET") {
-            const assetId = decodeURIComponent(assetMatch[1]!);
+          // 2a. GET /api/assets/:id/thumb (lightweight preview thumbnail)
+          const thumbMatch = url.match(/^\/api\/assets\/([^/]+)\/thumb$/);
+          if (thumbMatch && req.method === "GET") {
+            const assetId = decodeURIComponent(thumbMatch[1]!);
+            const apiKey = readEnvKey(server.config.root, "PIXABAY_API_KEY");
             const store = readDiskStore(dataDir);
-            const meta = store.assets[assetId];
+            let meta: StoredAssetMeta | undefined = store.assets[assetId];
+            if (!meta && (assetId.startsWith("pxv_") || assetId.startsWith("pxi_"))) {
+              meta = (await recoverPixabayAssetMeta(dataDir, store, assetId, apiKey)) ?? undefined;
+            }
             if (!meta) {
               sendJson(res, 404, { error: "asset metadata not found" });
               return;
             }
-            const ready = await ensureAssetCachedOnDisk(meta);
+            const thumbFile = await ensureThumbCachedOnDisk(meta, {
+              dataDir,
+              store,
+              assetId,
+              apiKey,
+            });
+            if (!thumbFile || !fs.existsSync(thumbFile)) {
+              sendJson(res, 404, { error: "asset thumbnail not available" });
+              return;
+            }
+            const fileBuf = fs.readFileSync(thumbFile);
+            res.statusCode = 200;
+            res.setHeader("Content-Type", thumbFile.endsWith(".png") ? "image/png" : "image/jpeg");
+            res.setHeader("Cache-Control", "public, max-age=86400");
+            res.setHeader("Content-Length", String(fileBuf.byteLength));
+            res.end(fileBuf);
+            return;
+          }
+
+          // 2b. GET /api/assets/:id/proxy (low-resolution video/image for editing; full-res deferred until export)
+          const proxyMatch = url.match(/^\/api\/assets\/([^/]+)\/proxy$/);
+          if (proxyMatch && req.method === "GET") {
+            const assetId = decodeURIComponent(proxyMatch[1]!);
+            const apiKey = readEnvKey(server.config.root, "PIXABAY_API_KEY");
+            const store = readDiskStore(dataDir);
+            let meta: StoredAssetMeta | undefined = store.assets[assetId];
+            if (!meta && (assetId.startsWith("pxv_") || assetId.startsWith("pxi_"))) {
+              meta = (await recoverPixabayAssetMeta(dataDir, store, assetId, apiKey)) ?? undefined;
+            }
+            if (!meta) {
+              sendJson(res, 404, { error: "asset metadata not found" });
+              return;
+            }
+            const proxyFile = await ensureProxyCachedOnDisk(meta, {
+              dataDir,
+              store,
+              assetId,
+              apiKey,
+            });
+            if (!proxyFile || !fs.existsSync(proxyFile)) {
+              sendJson(res, 404, { error: "asset proxy not available" });
+              return;
+            }
+            const stat = fs.statSync(proxyFile);
+            const totalSize = stat.size;
+            const rangeHeader = req.headers.range;
+            res.setHeader("Content-Type", meta.mimeType);
+            res.setHeader("Accept-Ranges", "bytes");
+            res.setHeader("Cache-Control", "public, max-age=86400");
+
+            if (rangeHeader) {
+              const parts = rangeHeader.replace(/bytes=/, "").split("-");
+              const start = Number.parseInt(parts[0] || "0", 10);
+              const end = parts[1] ? Number.parseInt(parts[1], 10) : totalSize - 1;
+              const chunkSize = Math.max(0, end - start + 1);
+              const fd = fs.openSync(proxyFile, "r");
+              const chunkBuf = Buffer.alloc(chunkSize);
+              fs.readSync(fd, chunkBuf, 0, chunkSize, start);
+              fs.closeSync(fd);
+              res.statusCode = 206;
+              res.setHeader("Content-Range", `bytes ${start}-${end}/${totalSize}`);
+              res.setHeader("Content-Length", String(chunkSize));
+              res.end(chunkBuf);
+              return;
+            }
+
+            const fileBuf = fs.readFileSync(proxyFile);
+            res.statusCode = 200;
+            res.setHeader("Content-Length", String(fileBuf.byteLength));
+            res.end(fileBuf);
+            return;
+          }
+
+          // 2c. GET /api/assets/:id/file (serves uploaded or on-demand cached full-resolution files)
+          const assetMatch = url.match(/^\/api\/assets\/([^/]+)\/file$/);
+          if (assetMatch && req.method === "GET") {
+            const assetId = decodeURIComponent(assetMatch[1]!);
+            const apiKey = readEnvKey(server.config.root, "PIXABAY_API_KEY");
+            const store = readDiskStore(dataDir);
+            let meta: StoredAssetMeta | undefined = store.assets[assetId];
+            if (!meta && (assetId.startsWith("pxv_") || assetId.startsWith("pxi_"))) {
+              meta = (await recoverPixabayAssetMeta(dataDir, store, assetId, apiKey)) ?? undefined;
+            }
+            if (!meta) {
+              sendJson(res, 404, { error: "asset metadata not found" });
+              return;
+            }
+            const ready = await ensureAssetCachedOnDisk(meta, {
+              dataDir,
+              store,
+              assetId,
+              apiKey,
+            });
             if (!ready || !fs.existsSync(meta.filePath)) {
               sendJson(res, 404, { error: "asset file not found" });
               return;
@@ -657,20 +1062,38 @@ function videoforgeStudioPlugin(): Plugin {
                   ? Buffer.from(parsed.audioWavBase64, "base64")
                   : undefined;
 
+              const apiKey = readEnvKey(server.config.root, "PIXABAY_API_KEY");
               const store = readDiskStore(dataDir);
               const assetFiles: Record<string, string> = {};
-              // Ensure all referenced project media assets are downloaded to disk before running FFmpeg export
-              for (const clip of Object.values(project.clips) as Array<{ source?: { assetId?: string } }>) {
-                const aid = clip.source?.assetId;
-                if (!aid) continue;
-                const meta = store.assets[aid];
-                if (meta) {
-                  await ensureAssetCachedOnDisk(meta);
-                  if (fs.existsSync(meta.filePath)) {
-                    assetFiles[aid] = meta.filePath;
+              const uniqueAssetIds = Array.from(
+                new Set(
+                  (Object.values(project.clips) as Array<{ source?: { assetId?: string } }>)
+                    .map((c) => c.source?.assetId)
+                    .filter((aid): aid is string => Boolean(aid)),
+                ),
+              );
+              // Download full-resolution videos/images on-demand in parallel only when exporting
+              await Promise.all(
+                uniqueAssetIds.map(async (aid) => {
+                  let meta: StoredAssetMeta | undefined = store.assets[aid];
+                  if (!meta && (aid.startsWith("pxv_") || aid.startsWith("pxi_"))) {
+                    meta = (await recoverPixabayAssetMeta(dataDir, store, aid, apiKey)) ?? undefined;
                   }
-                }
-              }
+                  if (meta) {
+                    const ctx = { dataDir, store, assetId: aid, apiKey };
+                    await ensureAssetCachedOnDisk(meta, ctx);
+                    if (fs.existsSync(meta.filePath) && fs.statSync(meta.filePath).size > 0) {
+                      assetFiles[aid] = meta.filePath;
+                      return;
+                    }
+                    // Fallback to proxy file if full-res download failed so export never misses a stock asset
+                    const proxyFile = await ensureProxyCachedOnDisk(meta, ctx);
+                    if (proxyFile && fs.existsSync(proxyFile) && fs.statSync(proxyFile).size > 0) {
+                      assetFiles[aid] = proxyFile;
+                    }
+                  }
+                }),
+              );
 
               await exportMod.exportProjectToMp4(project, {
                 outputPath: mp4Path,

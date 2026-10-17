@@ -198,6 +198,26 @@ class RetrieveAndRankTests(unittest.TestCase):
         assigned = assign_video_scenes([cands1, cands2], [4.0, 3.0], weights=Weights())
         self.assertEqual([c.shot_id for c in assigned], [10, 20])
 
+    def test_enrich_intent_from_raw_narration(self) -> None:
+        from matcher.rank import enrich_intent_from_narration
+
+        raw_intent = enrich_intent_from_narration(
+            "Revenue grew steadily throughout the year."
+        )
+        self.assertEqual(raw_intent["literal"], "rising bar chart on a screen")
+        self.assertIn("financial growth", raw_intent["abstract"])
+        self.assertIn("chart", raw_intent["keywords"])
+        self.assertEqual(raw_intent["mood"], "optimistic")
+
+        cands = retrieve_and_rank(
+            self.store,
+            {"literal": "Revenue grew steadily throughout the year."},
+            needed_s=3.0,
+            k=5,
+            embedder=self.embedder,
+        )
+        self.assertEqual(cands[0].shot_id, 20)
+
 
 if __name__ == "__main__":
     unittest.main()

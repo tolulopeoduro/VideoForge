@@ -7,9 +7,12 @@ import {
   validateProject,
 } from "@vf/schema";
 import {
+  assignSequentialShotsForScenes,
   buildGenerateFromScriptOp,
   buildRegenerateSceneOp,
+  buildSearchQueriesForIntent,
   catalogAssetsRecord,
+  extractSceneIntent,
 } from "../../../apps/web/src/generator";
 
 describe("script-to-video generator ops", () => {
@@ -60,5 +63,67 @@ describe("script-to-video generator ops", () => {
     expect(afterRegen2.clips.ai_v_scene_1!.source!.assetId).toBe("stock_city");
     expect(afterRegen2.clips.ai_v_scene_2!.source!.assetId).not.toBe("stock_chart");
     expect(afterRegen2.clips.ai_v_scene_2!.provenance.userModified).toBe(false);
+  });
+
+  it("enriches narration into visual B-roll intents, builds clean search queries, and applies clip-local Ken Burns keyframes", () => {
+    const intent = extractSceneIntent("Revenue grew steadily throughout the year.");
+    expect(intent.abstract).toContain("financial growth");
+    expect(intent.keywords).toContain("chart");
+    expect(intent.keywords).not.toContain("grew");
+    expect(intent.keywords).not.toContain("steadily");
+    expect(intent.avoid).toContain("watermark");
+
+    const queries = buildSearchQueriesForIntent(intent, "Revenue grew steadily throughout the year.");
+    expect(queries.length).toBeGreaterThanOrEqual(2);
+    expect(queries[0]).toBe("chart growth");
+
+    const s1 = extractSceneIntent("Our team starts every morning with a quick planning session.");
+    const s2 = extractSceneIntent("Our collaborative office team meets daily to support colleagues.");
+    const assigned = assignSequentialShotsForScenes([
+      { id: "scene_1", intent: s1 },
+      { id: "scene_2", intent: s2 },
+    ]);
+    expect(assigned.get("scene_1")?.spec.assetId).toBe("stock_office");
+    // Sequential assignment avoids reusing stock_office on back-to-back scenes
+    expect(assigned.get("scene_2")?.spec.assetId).not.toBe("stock_office");
+
+    const empty = {
+      ...createEmptyProject({ id: "gen-ken-burns", title: "Ken Burns Test" }),
+      assets: catalogAssetsRecord(),
+    };
+    const cut = applyChecked(
+      empty,
+      buildGenerateFromScriptOp(empty, "Revenue grew steadily throughout the year."),
+      { actor: "ai" },
+    ).next;
+    const vClip = cut.clips.ai_v_scene_1!;
+    expect("keys" in vClip.transform.scale).toBe(true);
+    if ("keys" in vClip.transform.scale) {
+      expect(vClip.transform.scale.keys[0]?.t).toBe(0);
+      expect(vClip.transform.scale.keys[1]?.t).toBe(vClip.duration);
+    }
+  });
+
+  it("opens the matching sidebar panel when a media, voice, or text clip is selected and resolves stock thumbnails", async () => {
+    const { useEditor } = await import("../../../apps/web/src/store");
+    const { resolveAssetThumbnailUrl } = await import("../../../apps/web/src/mediaCache");
+
+    const state = useEditor.getState();
+    // Clicking a video clip on v1 opens the "clip" panel
+    state.selectClipAndOpenPanel("ai_v_scene_1");
+    expect(useEditor.getState().activePanel).toBe("clip");
+
+    // Clicking a voice clip on a1 opens the "voice" panel
+    state.selectClipAndOpenPanel("voice_scene_1");
+    expect(useEditor.getState().activePanel).toBe("voice");
+
+    // Clicking a text clip on t1 opens the "text" panel
+    state.selectClipAndOpenPanel("ai_t_scene_1");
+    expect(useEditor.getState().activePanel).toBe("text");
+
+    // Stock thumbnail URL resolution for live stock assets
+    expect(resolveAssetThumbnailUrl("pxv_12345")).toBe("/api/assets/pxv_12345/thumb");
+    expect(resolveAssetThumbnailUrl("pxi_98765")).toBe("/api/assets/pxi_98765/thumb");
+    expect(resolveAssetThumbnailUrl("wiki_54321")).toBe("/api/assets/wiki_54321/thumb");
   });
 });

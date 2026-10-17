@@ -11,7 +11,7 @@
     "dev:render": "npm run dev -w @vf/render-worker",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm test --workspaces --if-present && npm run test:py",
-    "test:py": "cd services/matcher && python3 -m unittest discover -s tests"
+    "test:py": "cd services/matcher && (/usr/bin/python3 -m unittest discover -s tests || python3 -m unittest discover -s tests)"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

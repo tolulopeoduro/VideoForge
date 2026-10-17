@@ -121,6 +121,7 @@ export async function createDiskAssetFrameProvider(
       asset?.type === "image" || [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext);
 
     if (isImage) {
+      let loaded = false;
       try {
         const img = await loadImage(filePath);
         const w = Math.max(1, img.width || asset?.width || project.canvas.width);
@@ -129,16 +130,58 @@ export async function createDiskAssetFrameProvider(
         const ctx = surface.getContext("2d");
         ctx.drawImage(img, 0, 0, w, h);
         staticImages.set(assetId, { image: surface, width: w, height: h });
+        loaded = true;
       } catch {
-        // Fallback to stub if image fails to decode
+        // Fall through to ffmpeg single-frame decoder (handles WebP/AVIF/TIFF/etc.)
+      }
+      if (!loaded) {
+        const targetW = Math.min(1280, Math.max(64, asset?.width ?? 1280));
+        const targetH = Math.min(720, Math.max(64, asset?.height ?? 720));
+        const frameBytes = targetW * targetH * 4;
+        const imgRes = spawnSync(
+          ffmpegBin,
+          [
+            "-v",
+            "error",
+            "-i",
+            filePath,
+            "-frames:v",
+            "1",
+            "-vf",
+            `scale=${targetW}:${targetH}`,
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+            "pipe:1",
+          ],
+          { maxBuffer: 64 * 1024 * 1024 },
+        );
+        if (imgRes.status === 0 && imgRes.stdout && imgRes.stdout.byteLength >= frameBytes) {
+          const surface = createCanvas(targetW, targetH);
+          const ctx = surface.getContext("2d");
+          const rgba = new Uint8ClampedArray(imgRes.stdout.subarray(0, frameBytes));
+          const imgData = new ImageData(rgba, targetW, targetH);
+          ctx.putImageData(imgData as unknown as globalThis.ImageData, 0, 0);
+          staticImages.set(assetId, { image: surface, width: targetW, height: targetH });
+        }
       }
       continue;
     }
 
-    // Video asset: decode frames via ffmpeg into RGBA buffers
+    // Video asset: bound decoded duration to what clips actually use so 45s+ stock videos never overflow maxBuffer
+    const matchingClips = Object.values(project.clips).filter(
+      (c) => c.source?.assetId === assetId,
+    );
+    const maxSourceEndUs = matchingClips.reduce((maxUs, c) => {
+      const endUs = (c.source?.in ?? 0) + Math.ceil(c.duration * (c.source?.speed ?? 1));
+      return Math.max(maxUs, endUs);
+    }, 5_000_000);
+    const maxDecodeSec = Math.min(20, Math.max(2, Math.ceil(maxSourceEndUs / US_PER_SEC) + 1));
+
     const targetW = Math.min(640, Math.max(64, asset?.width ?? 640));
     const targetH = Math.min(360, Math.max(64, asset?.height ?? 360));
-    const sampleFps = Math.min(30, Math.max(5, project.canvas.fps || 15));
+    const sampleFps = Math.min(24, Math.max(5, project.canvas.fps || 15));
     const frameBytes = targetW * targetH * 4;
 
     const res = spawnSync(
@@ -146,6 +189,8 @@ export async function createDiskAssetFrameProvider(
       [
         "-v",
         "error",
+        "-t",
+        String(maxDecodeSec),
         "-i",
         filePath,
         "-vf",
@@ -158,7 +203,7 @@ export async function createDiskAssetFrameProvider(
         "rgba",
         "pipe:1",
       ],
-      { maxBuffer: 256 * 1024 * 1024 },
+      { maxBuffer: 512 * 1024 * 1024 },
     );
 
     if (res.status === 0 && res.stdout && res.stdout.byteLength >= frameBytes) {
