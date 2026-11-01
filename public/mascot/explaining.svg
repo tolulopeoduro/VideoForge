@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="100%" height="100%">
+  <defs>
+    <filter id="bulbGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="15" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <radialGradient id="bulbGlass" cx="45%" cy="40%" r="55%">
+      <stop offset="0%" stop-color="#fffbeb" stop-opacity="0.95" />
+      <stop offset="60%" stop-color="#fef08a" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#facc15" stop-opacity="0.7" />
+    </radialGradient>
+    <linearGradient id="suitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="60%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="lapelGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="brassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#b45309" />
+      <stop offset="35%" stop-color="#fbbf24" />
+      <stop offset="70%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Explaining Glow & Light Rays -->
+  <circle cx="250" cy="180" r="160" fill="#fde047" opacity="0.35" filter="url(#bulbGlow)" />
+  <path d="M 250 20 L 250 2" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+  <path d="M 120 70 L 105 55" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+  <path d="M 380 70 L 395 55" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+  <path d="M 90 160 L 70 160" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+  <path d="M 410 160 L 430 160" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+
+  <!-- SUIT BODY & TORSO -->
+  <g id="body">
+    <!-- Back jacket base -->
+    <path d="M 160 380 L 100 680 L 400 680 L 340 380 Z" fill="url(#suitGrad)" stroke="#090d16" stroke-width="6" />
+
+    <!-- White Turtleneck Sweater -->
+    <path d="M 190 310 L 195 380 Q 250 400 305 380 L 310 310 Z" fill="#f8fafc" stroke="#090d16" stroke-width="6" />
+    <path d="M 200 330 Q 250 345 300 330" fill="none" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
+    <path d="M 205 355 Q 250 370 295 355" fill="none" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
+
+    <!-- Navy Suit Shoulders and Jacket Front -->
+    <path d="M 190 325 C 140 335 105 380 90 435 L 140 570 L 220 540 L 210 380 Z" fill="url(#suitGrad)" stroke="#090d16" stroke-width="6" />
+    <path d="M 310 325 C 360 335 395 380 415 440 L 375 560 L 280 540 L 290 380 Z" fill="url(#suitGrad)" stroke="#090d16" stroke-width="6" />
+
+    <!-- Navy Lapels -->
+    <path d="M 195 340 L 150 440 L 235 480 L 230 385 Z" fill="url(#lapelGrad)" stroke="#090d16" stroke-width="6" />
+    <path d="M 305 340 L 350 440 L 265 480 L 270 385 Z" fill="url(#lapelGrad)" stroke="#090d16" stroke-width="6" />
+
+    <!-- Jacket Pocket & Gold Accent Pocket Square -->
+    <path d="M 135 470 L 175 460" stroke="#090d16" stroke-width="5" stroke-linecap="round" />
+    <polygon points="148,468 156,450 166,466" fill="#f59e0b" stroke="#090d16" stroke-width="3" />
+
+    <!-- Center Line & Buttons -->
+    <path d="M 250 480 L 250 680" stroke="#090d16" stroke-width="5" />
+    <circle cx="250" cy="520" r="7" fill="#334155" stroke="#090d16" stroke-width="3" />
+    <circle cx="250" cy="580" r="7" fill="#334155" stroke="#090d16" stroke-width="3" />
+  </g>
+
+  <!-- FORMAL WHITE GLOVES (Explaining Pose: Right hand open palm raised, Left hand gesturing) -->
+  <g id="gloves-explaining">
+    <!-- Left Arm & Glove gesturing slightly out -->
+    <path d="M 100 440 Q 60 510 90 570" fill="none" stroke="#090d16" stroke-width="6" />
+    <g transform="translate(80, 550) rotate(-15)">
+      <path d="M 10 10 Q 30 -5 50 15 C 60 35 40 55 15 45 C -5 40 0 25 10 10 Z" fill="#ffffff" stroke="#090d16" stroke-width="5" />
+      <path d="M 25 18 L 30 35" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+      <path d="M 35 22 L 40 38" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+    </g>
+
+    <!-- Right Arm & Explaining Open Palm Hand -->
+    <path d="M 390 430 Q 440 480 435 520" fill="none" stroke="#090d16" stroke-width="6" />
+    <!-- Formal Glove: Open palm presentation -->
+    <g transform="translate(390, 480)">
+      <path d="M 20 50 C 40 30 65 20 85 25 C 95 30 95 45 80 55 L 85 45 C 95 48 95 60 80 68 L 85 62 C 92 68 88 78 75 80 L 40 85 C 20 85 10 70 20 50 Z" 
+            fill="#ffffff" stroke="#090d16" stroke-width="5" stroke-linejoin="round" />
+      <!-- Stitching lines on back of glove -->
+      <path d="M 35 55 L 55 60" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+      <path d="M 38 65 L 58 70" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+      <path d="M 40 75 L 55 78" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- BRASS BULB COLLAR & THREADS -->
+  <g id="bulb-base">
+    <rect x="215" y="270" width="70" height="12" rx="4" fill="url(#brassGrad)" stroke="#090d16" stroke-width="4" />
+    <rect x="220" y="284" width="60" height="12" rx="4" fill="url(#brassGrad)" stroke="#090d16" stroke-width="4" />
+    <rect x="225" y="298" width="50" height="14" rx="4" fill="url(#brassGrad)" stroke="#090d16" stroke-width="4" />
+    <path d="M 235 312 L 265 312 L 255 322 L 245 322 Z" fill="#334155" stroke="#090d16" stroke-width="3" />
+  </g>
+
+  <!-- LIGHTBULB HEAD & EXPLAINING EXPRESSION -->
+  <g id="head">
+    <!-- Bulb Glass Outline -->
+    <path d="M 215 270 C 180 260 140 220 140 160 C 140 90 190 40 250 40 C 310 40 360 90 360 160 C 360 220 320 260 285 270 Z" 
+          fill="url(#bulbGlass)" stroke="#090d16" stroke-width="7" stroke-linejoin="round" />
+
+    <!-- Highlights -->
+    <path d="M 165 110 C 160 135 160 165 170 185" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.85" />
+    <circle cx="178" cy="88" r="6" fill="#ffffff" opacity="0.9" />
+
+    <!-- Radiant Filament -->
+    <path d="M 225 260 L 230 190 Q 235 165 250 165 Q 265 165 270 190 L 275 260" fill="none" stroke="#d97706" stroke-width="4" />
+    <path d="M 235 175 C 230 140 245 135 250 135 C 255 135 270 140 265 175" fill="none" stroke="#f59e0b" stroke-width="6" filter="url(#bulbGlow)" />
+
+    <!-- Eyes (Animated, engaged) -->
+    <!-- Left Eye -->
+    <ellipse cx="215" cy="155" rx="15" ry="19" fill="#090d16" />
+    <circle cx="218" cy="148" r="5" fill="#ffffff" />
+    <circle cx="212" cy="162" r="2.5" fill="#ffffff" />
+    <path d="M 198 128 Q 215 120 232 128" fill="none" stroke="#090d16" stroke-width="5" stroke-linecap="round" />
+
+    <!-- Right Eye (Slightly raised brow) -->
+    <ellipse cx="285" cy="155" rx="15" ry="19" fill="#090d16" />
+    <circle cx="288" cy="148" r="5" fill="#ffffff" />
+    <circle cx="282" cy="162" r="2.5" fill="#ffffff" />
+    <path d="M 268 124 Q 285 116 302 124" fill="none" stroke="#090d16" stroke-width="5" stroke-linecap="round" />
+
+    <!-- Open Speaking Mouth (Articulating speech) -->
+    <path d="M 230 200 Q 250 192 270 200 C 275 220 225 220 230 200 Z" fill="#881337" stroke="#090d16" stroke-width="5" stroke-linejoin="round" />
+    <!-- White teeth highlight -->
+    <path d="M 236 200 Q 250 196 264 200 Q 250 206 236 200 Z" fill="#ffffff" />
+    <!-- Pink tongue -->
+    <path d="M 240 215 Q 250 208 260 215 Q 250 222 240 215 Z" fill="#f43f5e" />
+  </g>
+</svg>

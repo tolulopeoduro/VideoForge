@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 700" width="100%" height="100%">
+  <defs>
+    <filter id="bulbGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="20" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <radialGradient id="bulbGlass" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.98" />
+      <stop offset="40%" stop-color="#fef08a" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.85" />
+    </radialGradient>
+    <linearGradient id="suitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="60%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="lapelGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="brassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#b45309" />
+      <stop offset="35%" stop-color="#fbbf24" />
+      <stop offset="70%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+  </defs>
+
+  <!-- ELECTRIC SHOCKED AURA & SPARKS -->
+  <circle cx="250" cy="180" r="175" fill="#fef08a" opacity="0.45" filter="url(#bulbGlow)" />
+  <!-- Comic Electric Shock Zaps -->
+  <polygon points="250,-10 260,20 245,25 255,50 235,28 248,22" fill="#fbbf24" stroke="#d97706" stroke-width="2" />
+  <polygon points="100,60 125,75 115,85 140,100 120,90 128,80" fill="#fbbf24" stroke="#d97706" stroke-width="2" />
+  <polygon points="400,60 375,75 385,85 360,100 380,90 372,80" fill="#fbbf24" stroke="#d97706" stroke-width="2" />
+  <polygon points="70,180 95,190 85,200 110,215 90,205 98,195" fill="#fbbf24" stroke="#d97706" stroke-width="2" />
+  <polygon points="430,180 405,190 415,200 390,215 410,205 402,195" fill="#fbbf24" stroke="#d97706" stroke-width="2" />
+
+  <!-- SUIT BODY & TORSO -->
+  <g id="body">
+    <!-- Back jacket base -->
+    <path d="M 160 380 L 100 680 L 400 680 L 340 380 Z" fill="url(#suitGrad)" stroke="#090d16" stroke-width="6" />
+
+    <!-- White Turtleneck Sweater -->
+    <path d="M 190 310 L 195 380 Q 250 400 305 380 L 310 310 Z" fill="#f8fafc" stroke="#090d16" stroke-width="6" />
+    <path d="M 200 330 Q 250 345 300 330" fill="none" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
+    <path d="M 205 355 Q 250 370 295 355" fill="none" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round" />
+
+    <!-- Navy Suit Shoulders and Jacket Front (Tense/jumped posture) -->
+    <path d="M 190 310 C 130 320 90 360 80 410 L 120 540 L 210 520 L 200 370 Z" fill="url(#suitGrad)" stroke="#090d16" stroke-width="6" />
+    <path d="M 310 310 C 370 320 410 360 420 410 L 380 540 L 290 520 L 300 370 Z" fill="url(#suitGrad)" stroke="#090d16" stroke-width="6" />
+
+    <!-- Lapels -->
+    <path d="M 195 330 L 145 420 L 230 460 L 220 375 Z" fill="url(#lapelGrad)" stroke="#090d16" stroke-width="6" />
+    <path d="M 305 330 L 355 420 L 270 460 L 280 375 Z" fill="url(#lapelGrad)" stroke="#090d16" stroke-width="6" />
+
+    <!-- Center Line & Buttons -->
+    <path d="M 250 460 L 250 680" stroke="#090d16" stroke-width="5" />
+    <circle cx="250" cy="510" r="7" fill="#334155" stroke="#090d16" stroke-width="3" />
+    <circle cx="250" cy="570" r="7" fill="#334155" stroke="#090d16" stroke-width="3" />
+  </g>
+
+  <!-- FORMAL WHITE GLOVES (Shocked Pose: Hands raised high to sides of head) -->
+  <g id="gloves-shocked">
+    <!-- Left Arm raising up -->
+    <path d="M 90 400 Q 60 300 110 240" fill="none" stroke="#090d16" stroke-width="6" />
+    <!-- Left Glove (Splayed fingers near bulb) -->
+    <g transform="translate(85, 175) rotate(-20)">
+      <path d="M 20 60 C 5 45 0 25 15 10 C 25 0 35 15 32 30 C 40 10 55 5 62 20 C 68 35 55 45 48 55 C 65 40 78 45 80 60 C 80 75 60 85 45 90 C 25 95 10 80 20 60 Z"
+            fill="#ffffff" stroke="#090d16" stroke-width="5" stroke-linejoin="round" />
+      <path d="M 25 70 L 35 55" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+      <path d="M 35 75 L 45 60" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+    </g>
+
+    <!-- Right Arm raising up -->
+    <path d="M 410 400 Q 440 300 390 240" fill="none" stroke="#090d16" stroke-width="6" />
+    <!-- Right Glove (Splayed fingers near bulb) -->
+    <g transform="translate(345, 155) rotate(20)">
+      <path d="M 60 60 C 75 45 80 25 65 10 C 55 0 45 15 48 30 C 40 10 25 5 18 20 C 12 35 25 45 32 55 C 15 40 2 45 0 60 C 0 75 20 85 35 90 C 55 95 70 80 60 60 Z"
+            fill="#ffffff" stroke="#090d16" stroke-width="5" stroke-linejoin="round" />
+      <path d="M 55 70 L 45 55" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+      <path d="M 45 75 L 35 60" stroke="#090d16" stroke-width="3" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- BRASS BULB COLLAR & THREADS -->
+  <g id="bulb-base">
+    <rect x="215" y="270" width="70" height="12" rx="4" fill="url(#brassGrad)" stroke="#090d16" stroke-width="4" />
+    <rect x="220" y="284" width="60" height="12" rx="4" fill="url(#brassGrad)" stroke="#090d16" stroke-width="4" />
+    <rect x="225" y="298" width="50" height="14" rx="4" fill="url(#brassGrad)" stroke="#090d16" stroke-width="4" />
+    <path d="M 235 312 L 265 312 L 255 322 L 245 322 Z" fill="#334155" stroke="#090d16" stroke-width="3" />
+  </g>
+
+  <!-- LIGHTBULB HEAD & SHOCKED EXPRESSION -->
+  <g id="head">
+    <!-- Bulb Glass Outline -->
+    <path d="M 215 270 C 180 260 140 220 140 160 C 140 90 190 40 250 40 C 310 40 360 90 360 160 C 360 220 320 260 285 270 Z" 
+          fill="url(#bulbGlass)" stroke="#090d16" stroke-width="7" stroke-linejoin="round" />
+
+    <!-- Highlights -->
+    <path d="M 165 110 C 160 135 160 165 170 185" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.9" />
+    <circle cx="178" cy="88" r="6" fill="#ffffff" opacity="0.95" />
+
+    <!-- Zig-zag electric filament -->
+    <path d="M 225 260 L 235 210 L 245 220 L 250 180 L 255 215 L 265 205 L 275 260" fill="none" stroke="#ea580c" stroke-width="5" />
+    <path d="M 240 170 L 250 140 L 260 170" fill="none" stroke="#f59e0b" stroke-width="6" filter="url(#bulbGlow)" />
+
+    <!-- Huge Shocked Eyes -->
+    <!-- Left Eye -->
+    <circle cx="210" cy="145" r="22" fill="#ffffff" stroke="#090d16" stroke-width="5" />
+    <circle cx="210" cy="145" r="6" fill="#090d16" />
+    <circle cx="208" cy="143" r="2" fill="#ffffff" />
+    <!-- High arched shock brow -->
+    <path d="M 190 110 Q 210 100 230 110" fill="none" stroke="#090d16" stroke-width="5" stroke-linecap="round" />
+
+    <!-- Right Eye -->
+    <circle cx="290" cy="145" r="22" fill="#ffffff" stroke="#090d16" stroke-width="5" />
+    <circle cx="290" cy="145" r="6" fill="#090d16" />
+    <circle cx="288" cy="143" r="2" fill="#ffffff" />
+    <!-- High arched shock brow -->
+    <path d="M 270 110 Q 290 100 310 110" fill="none" stroke="#090d16" stroke-width="5" stroke-linecap="round" />
+
+    <!-- Wide Open Screaming/Gasping Comic Mouth -->
+    <ellipse cx="250" cy="215" rx="18" ry="24" fill="#881337" stroke="#090d16" stroke-width="5" />
+    <!-- Comic tongue at bottom -->
+    <path d="M 238 230 Q 250 220 262 230 Q 250 238 238 230 Z" fill="#f43f5e" />
+    <!-- Shock sweat drop -->
+    <path d="M 330 135 C 330 130 338 120 338 120 C 338 120 346 130 346 135 C 346 140 342 144 338 144 C 334 144 330 140 330 135 Z" fill="#38bdf8" stroke="#0284c7" stroke-width="2" />
+  </g>
+</svg>

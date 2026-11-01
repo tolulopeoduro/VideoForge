@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+venv/
+.venv/
+
+# Next.js
+.next/
+out/
+
+# Remotion
+.remotion/
+out/
+bundle/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated media
+public/generated/
+public/renders/
+*.wav
+*.mp4
