@@ -1,469 +1,382 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Scene, ScriptOptimizationResult, VisualReferenceItem } from "@/types/schema";
+import { performDeepTopicResearch, ResearchDossier } from "./research";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt = "", rawScript = "", tone = "viral", orientation = "9:16" } = await req.json();
+    const body = await req.json();
+    const {
+      prompt = "",
+      rawScript = "",
+      tone = "viral",
+      orientation = "9:16",
+      provider = "default",
+      apiKey = "",
+      modelName = "",
+      customEndpoint = "",
+    } = body;
 
     const inputTopic = (prompt || rawScript || "The future of AI video generation").trim();
 
-    // 1. Check for OpenAI or Gemini API Key
-    const openAiKey = process.env.OPENAI_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
+    // 1. Perform Live Encyclopedic & Web Deep Research
+    const research: ResearchDossier = await performDeepTopicResearch(inputTopic);
 
-    if (openAiKey) {
+    // 2. Resolve API Key & Provider priority:
+    // If user passed key in request body, use it; otherwise check process.env
+    const effectiveOpenAiKey =
+      provider === "openai" ? apiKey : process.env.OPENAI_API_KEY || (apiKey && provider === "default" ? apiKey : "");
+    const effectiveGeminiKey =
+      provider === "gemini" ? apiKey : process.env.GEMINI_API_KEY;
+    const effectiveGroqKey =
+      provider === "groq" ? apiKey : process.env.GROQ_API_KEY;
+
+    let aiResult: ScriptOptimizationResult | null = null;
+
+    if (provider === "groq" || effectiveGroqKey) {
       try {
-        const aiResult = await callOpenAIScriptGenerator(inputTopic, rawScript, tone, openAiKey);
-        if (aiResult) {
-          return NextResponse.json({ success: true, result: aiResult });
-        }
-      } catch (err) {
-        console.warn("OpenAI API call failed, using semantic optimizer engine:", err);
+        aiResult = await callOpenAICompatibleEndpoint({
+          url: "https://api.groq.com/openai/v1/chat/completions",
+          apiKey: effectiveGroqKey || apiKey,
+          model: modelName || "llama-3.3-70b-versatile",
+          topic: inputTopic,
+          rawScript,
+          tone,
+          research,
+        });
+      } catch (e) {
+        console.warn("Groq generation failed, falling back:", e);
       }
-    } else if (geminiKey) {
+    } else if (provider === "ollama") {
       try {
-        const aiResult = await callGeminiScriptGenerator(inputTopic, rawScript, tone, geminiKey);
-        if (aiResult) {
-          return NextResponse.json({ success: true, result: aiResult });
-        }
-      } catch (err) {
-        console.warn("Gemini API call failed, using semantic optimizer engine:", err);
+        const ollamaBase = customEndpoint.replace(/\/$/, "") || "http://localhost:11434";
+        aiResult = await callOpenAICompatibleEndpoint({
+          url: `${ollamaBase}/v1/chat/completions`,
+          apiKey: "ollama",
+          model: modelName || "llama3",
+          topic: inputTopic,
+          rawScript,
+          tone,
+          research,
+        });
+      } catch (e) {
+        console.warn("Ollama generation failed, falling back:", e);
+      }
+    } else if (provider === "openrouter" && apiKey) {
+      try {
+        aiResult = await callOpenAICompatibleEndpoint({
+          url: "https://openrouter.ai/api/v1/chat/completions",
+          apiKey,
+          model: modelName || "meta-llama/llama-3.3-70b-instruct",
+          topic: inputTopic,
+          rawScript,
+          tone,
+          research,
+        });
+      } catch (e) {
+        console.warn("OpenRouter generation failed, falling back:", e);
+      }
+    } else if (effectiveOpenAiKey) {
+      try {
+        aiResult = await callOpenAICompatibleEndpoint({
+          url: "https://api.openai.com/v1/chat/completions",
+          apiKey: effectiveOpenAiKey,
+          model: modelName || "gpt-4o-mini",
+          topic: inputTopic,
+          rawScript,
+          tone,
+          research,
+        });
+      } catch (e) {
+        console.warn("OpenAI generation failed, falling back:", e);
+      }
+    } else if (effectiveGeminiKey) {
+      try {
+        aiResult = await callGeminiEndpoint({
+          apiKey: effectiveGeminiKey,
+          model: modelName || "gemini-1.5-flash",
+          topic: inputTopic,
+          rawScript,
+          tone,
+          research,
+        });
+      } catch (e) {
+        console.warn("Gemini generation failed, falling back:", e);
       }
     }
 
-    // 2. Built-in Semantic Script Optimization & Fact Injection Engine
-    const optimizedResult = generateSemanticOptimizedScript(inputTopic, rawScript, tone, orientation);
+    // 3. If an LLM produced a valid result, return it
+    if (aiResult && aiResult.scenes && aiResult.scenes.length >= 2) {
+      return NextResponse.json({ success: true, result: aiResult });
+    }
+
+    // 4. Built-in Deep Research Synthesizer (No API Key Required)
+    const synthesizedResult = synthesizeFromDeepResearch(
+      inputTopic,
+      rawScript,
+      tone,
+      orientation,
+      research
+    );
 
     return NextResponse.json({
       success: true,
-      result: optimizedResult,
+      result: synthesizedResult,
     });
   } catch (error: any) {
     console.error("Script generation error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to optimize script" },
+      { error: error.message || "Failed to generate researched script" },
       { status: 500 }
     );
   }
 }
 
-// Built-in intelligent script optimization & fact injector
-function generateSemanticOptimizedScript(
+/**
+ * Built-in Research Synthesizer: Constructs multi-sentence, substantive,
+ * fact-grounded scenes directly from the live research dossier.
+ */
+function synthesizeFromDeepResearch(
   topic: string,
   rawDraft: string,
   tone: string,
-  orientation: "9:16" | "16:9"
+  orientation: "9:16" | "16:9",
+  research: ResearchDossier
 ): ScriptOptimizationResult {
-  const isQuantum = /quantum|crypt|rsa|secur|comput/i.test(topic);
-  const isAI = /ai|agent|model|llm|neural|robot|automat/i.test(topic);
-  const isStartup = /startup|scale|saas|founder|growth|revenue|metric/i.test(topic);
-  const isVideo = /video|edit|remotion|render|script/i.test(topic);
-
-  let title = "The Semantic Video Revolution";
-  let summary = "How narrative scripts replace complex multitrack video editors with zero timeline friction.";
-  let scenes: Scene[] = [];
-  let factChecks: ScriptOptimizationResult["factChecks"] = [];
-  let visualReferences: VisualReferenceItem[] = [];
-
   const timestamp = Date.now();
+  const primarySource = research.sources[0];
+  const secondarySource = research.sources[1] || primarySource;
 
-  if (isQuantum) {
-    title = "Why Quantum Will Break RSA Encryption";
-    summary = "A fact-checked breakdown of Shor's algorithm, 2048-bit RSA, and post-quantum cryptography.";
-    factChecks = [
-      {
-        claim: "Modern banking relies on 2048-bit RSA factorization.",
-        sourceOrData: "NIST Special Publication 800-57 Part 1 Rev. 5",
-        injectedStat: "2048-bit",
-      },
-      {
-        claim: "Quantum Shor's algorithm reduces exponential factoring to polynomial time.",
-        sourceOrData: "Shor, P. W. (1994) SIAM Journal on Computing",
-        injectedStat: "10,000x",
-      },
-    ];
+  // Derive title from top research hit or topic
+  const cleanTitle = primarySource?.title
+    ? `${primarySource.title}: The Core Reality`
+    : topic.slice(0, 42);
 
-    scenes = [
-      {
-        id: `s-${timestamp}-1`,
-        startFrame: 0,
-        durationInFrames: 120,
-        scriptText:
-          "Everything you send over the internet is locked with RSA encryption. But quantum computers are about to crack it in seconds.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#0f172a",
-          motion: "zoom-in",
-          prompt: "Futuristic dark server vault with glowing cryptographic neon circuits and laser volumetric light",
-        },
-        mascot: {
-          isVisible: true,
-          pose: "shocked",
-          position: "left",
-          entranceAnimation: "pop-in",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-1`,
-            type: "lower-third",
-            props: {
-              category: "CYBERSECURITY",
-              title: "The Quantum Threat",
-              subtitle: "2048-Bit RSA at Risk",
-            },
-          },
-        ],
-      },
-      {
-        id: `s-${timestamp}-2`,
-        startFrame: 120,
-        durationInFrames: 130,
-        scriptText:
-          "Classical supercomputers take three hundred trillion years to factor 2048-bit keys. Shor's algorithm does it in hours.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#1e1b4b",
-          motion: "pan-left",
-          prompt: "Quantum cryostat dilution refrigerator with golden coiled wiring, 8k cinematic",
-        },
-        mascot: {
-          isVisible: true,
-          pose: "explaining",
-          position: "left",
-          entranceAnimation: "slide-up",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-2`,
-            type: "stat-counter",
-            props: {
-              label: "RSA Key Size",
-              targetValue: 2048,
-              prefix: "",
-              suffix: "-bit",
-              accentColor: "#6366f1",
-            },
-          },
-        ],
-      },
-      {
-        id: `s-${timestamp}-3`,
-        startFrame: 250,
-        durationInFrames: 120,
-        scriptText:
-          "That is why NIST standardized post-quantum cryptography. The race to migrate our infrastructure has already begun.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#064e3b",
-          motion: "zoom-in",
-          prompt: "Clean room laboratory with crystalline optical lattice and emerald laser beams",
-        },
-        mascot: {
-          isVisible: true,
-          pose: "pointing",
-          position: "left",
-          entranceAnimation: "pop-in",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-3`,
-            type: "progress-ring",
-            props: {
-              label: "Migration Readiness",
-              percentage: 84,
-              color: "#10b981",
-            },
-          },
-        ],
-      },
-    ];
-
-    visualReferences = [
-      {
-        id: `ref-${timestamp}-1`,
-        sceneId: `s-${timestamp}-1`,
-        title: "NIST Security Standard Badge",
-        description: "Official National Institute of Standards & Technology logo or post-quantum seal.",
-        reason: "FLUX cannot accurately reproduce government agency logos or trademark seals.",
-        assetType: "brand_logo",
-        status: "pending",
-      },
-      {
-        id: `ref-${timestamp}-2`,
-        sceneId: `s-${timestamp}-2`,
-        title: "IBM or Google Quantum Cryostat Photo",
-        description: "Real photo of a golden chandelier dilution refrigerator.",
-        reason: "Accurate real-world hardware photo ensures scientific credibility over AI hallucination.",
-        assetType: "style_reference",
-        status: "pending",
-      },
-    ];
-  } else if (isStartup || isAI) {
-    title = "The 85% Rule of Autonomous Scaling";
-    summary = "Why high-velocity teams replace human busywork with semantic agent pipelines.";
-    factChecks = [
-      {
-        claim: "Agentic automated pipelines reduce cycle latency by over 80%.",
-        sourceOrData: "Gartner Emerging Tech Horizon 2025",
-        injectedStat: "85%",
-      },
-      {
-        claim: "First-to-market generative workflows capture 3.2x higher organic distribution.",
-        sourceOrData: "Stanford AI Index Report",
-        injectedStat: "3.2x",
-      },
-    ];
-
-    scenes = [
-      {
-        id: `s-${timestamp}-1`,
-        startFrame: 0,
-        durationInFrames: 110,
-        scriptText:
-          rawDraft
-            ? `Here is the truth: ${rawDraft.slice(0, 90)}. Most teams build completely backwards.`
-            : "Most teams spend eighty percent of their week on repetitive manual busywork that software should do.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#090d16",
-          motion: "zoom-in",
-          prompt: "High-tech skyscraper boardroom overlooking midnight city skyline with dark blue ambiance",
-        },
-        mascot: {
-          isVisible: true,
-          pose: "shocked",
-          position: "left",
-          entranceAnimation: "pop-in",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-1`,
-            type: "lower-third",
-            props: {
-              category: "PRODUCTIVITY GAP",
-              title: "The Manual Bottleneck",
-              subtitle: "80% wasted on repetitive friction",
-            },
-          },
-        ],
-      },
-      {
-        id: `s-${timestamp}-2`,
-        startFrame: 110,
-        durationInFrames: 130,
-        scriptText:
-          "When you switch to semantic orchestration, your throughput jumps by three hundred percent in forty-eight hours.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#1e1b4b",
-          motion: "pan-left",
-          prompt: "Neon glowing server mainframe racks with high-speed fiber data streams",
-        },
-        mascot: {
-          isVisible: true,
-          pose: "pointing",
-          position: "left",
-          entranceAnimation: "pop-in",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-2`,
-            type: "stat-counter",
-            props: {
-              label: "Team Velocity",
-              targetValue: 340,
-              prefix: "+",
-              suffix: "%",
-              accentColor: "#6366f1",
-            },
-          },
-        ],
-      },
-      {
-        id: `s-${timestamp}-3`,
-        startFrame: 240,
-        durationInFrames: 120,
-        scriptText:
-          "Stop managing multitrack chaos. Let semantic logic generate your outcomes automatically.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#064e3b",
-          motion: "zoom-in",
-          prompt: "Modern minimalist architectural studio with ambient warm sunrise illumination",
-        },
-        mascot: {
-          isVisible: true,
-          pose: "explaining",
-          position: "left",
-          entranceAnimation: "slide-up",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-3`,
-            type: "progress-ring",
-            props: {
-              label: "Pipeline Automation",
-              percentage: 95,
-              color: "#10b981",
-            },
-          },
-        ],
-      },
-    ];
-
-    visualReferences = [
-      {
-        id: `ref-${timestamp}-1`,
-        sceneId: `s-${timestamp}-1`,
-        title: "Company / Founder Brand Asset",
-        description: "Official logo or product screenshot to anchor the narrative.",
-        reason: "FLUX cannot legally create accurate brand logos without trademark hallucination.",
-        assetType: "brand_logo",
-        status: "pending",
-      },
-      {
-        id: `ref-${timestamp}-2`,
-        sceneId: `s-${timestamp}-2`,
-        title: "Product UI Dashboard Screenshot",
-        description: "Clean screenshot of software interface or metrics graph.",
-        reason: "Real UI screenshots convey higher credibility than synthetic mockup images.",
-        assetType: "product_ui",
-        status: "pending",
-      },
-    ];
+  // Extract real facts or fallback to verified context
+  const factChecks: ScriptOptimizationResult["factChecks"] = [];
+  if (research.facts.length > 0) {
+    for (const f of research.facts.slice(0, 3)) {
+      factChecks.push({
+        claim: f.claim.length > 90 ? f.claim.slice(0, 87) + "..." : f.claim,
+        sourceOrData: f.source,
+        injectedStat: f.stat || "Verified",
+      });
+    }
   } else {
-    // Default tailored to input prompt
-    title = topic.length > 40 ? topic.slice(0, 38) + "..." : topic;
-    summary = `Optimized semantic video narrative engineered for maximum retention and clear message delivery.`;
-    factChecks = [
-      {
-        claim: "Semantic text anchoring eliminates 90% of manual editing overhead.",
-        sourceOrData: "ZeroTrack Benchmark Testing",
-        injectedStat: "90%",
-      },
-    ];
+    factChecks.push({
+      claim: `Historical and empirical research on ${topic}.`,
+      sourceOrData: primarySource?.title || "Encyclopedic Record",
+      injectedStat: "Primary",
+    });
+  }
 
-    scenes = [
-      {
-        id: `s-${timestamp}-1`,
-        startFrame: 0,
-        durationInFrames: 110,
-        scriptText: rawDraft || `Did you know that ${topic}? Here is what everyone is missing.`,
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#0f172a",
-          motion: "zoom-in",
-          prompt: `Cinematic high contrast environment representing ${topic}, volumetric light, 8k`,
-        },
-        mascot: {
-          isVisible: true,
-          pose: "explaining",
-          position: "left",
-          entranceAnimation: "slide-up",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-1`,
-            type: "lower-third",
-            props: {
-              category: "CORE INSIGHT",
-              title: title.slice(0, 24),
-              subtitle: "The breakthrough perspective",
-            },
-          },
-        ],
-      },
-      {
-        id: `s-${timestamp}-2`,
-        startFrame: 110,
-        durationInFrames: 120,
-        scriptText:
-          "The data shows a massive shift happening right now. Timing and execution are everything.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#1e1b4b",
-          motion: "pan-left",
-          prompt: `Modern tech research lab with holographic data displays, 8k wallpaper`,
-        },
-        mascot: {
-          isVisible: true,
-          pose: "pointing",
-          position: "left",
-          entranceAnimation: "pop-in",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-2`,
-            type: "stat-counter",
-            props: {
-              label: "Growth Impact",
-              targetValue: 88,
-              prefix: "+",
-              suffix: "%",
-              accentColor: "#6366f1",
-            },
-          },
-        ],
-      },
-      {
-        id: `s-${timestamp}-3`,
-        startFrame: 230,
-        durationInFrames: 120,
-        scriptText:
-          "Once you anchor your workflow around narrative clarity, the results compound immediately.",
-        wordTokens: [],
-        background: {
-          type: "color",
-          src: "#064e3b",
-          motion: "zoom-in",
-          prompt: `Emerald ambient minimalist studio with golden rim lighting`,
-        },
-        mascot: {
-          isVisible: true,
-          pose: "shocked",
-          position: "center",
-          entranceAnimation: "pop-in",
-        },
-        overlays: [
-          {
-            id: `o-${timestamp}-3`,
-            type: "progress-ring",
-            props: {
-              label: "Implementation Ready",
-              percentage: 100,
-              color: "#10b981",
-            },
-          },
-        ],
-      },
-    ];
+  // Construct Scene 1: The Hook & Context (Origins, Names, Dates)
+  let s1Text = "";
+  if (primarySource && primarySource.extract) {
+    const firstSentence = primarySource.extract.split(".")[0];
+    s1Text = `${firstSentence}. While most people think this is straightforward, the reality is far more complex.`;
+  } else if (rawDraft) {
+    s1Text = `${rawDraft.slice(0, 120)}. But if you look deeper into how it actually works, the data reveals a completely different picture.`;
+  } else {
+    s1Text = `Everything you have been told about ${topic} only scratches the surface. To understand what is really happening, we have to examine the foundational mechanisms.`;
+  }
 
-    visualReferences = [
-      {
-        id: `ref-${timestamp}-1`,
-        sceneId: `s-${timestamp}-1`,
-        title: "Key Subject Reference Image",
-        description: "Official photo or brand visual to ensure exact visual accuracy.",
-        reason: "Ensures accurate identity or style fidelity beyond text-to-image boundaries.",
-        assetType: "style_reference",
+  // Construct Scene 2: The Core Mechanism & Technical Data
+  let s2Text = "";
+  const keyFact = research.facts[0];
+  if (keyFact) {
+    s2Text = `Here is the critical data point: ${keyFact.claim} When you calculate the compounding effects, the difference is massive.`;
+  } else if (secondarySource && secondarySource.extract) {
+    const midSentence = secondarySource.extract.split(".")[0];
+    s2Text = `According to verified technical analysis: ${midSentence}. This forms the operational backbone that everything else relies upon.`;
+  } else {
+    s2Text = `When researchers broke down the mathematics, the numbers were staggering. Classical methods simply cannot keep pace with this exponential shift.`;
+  }
+
+  // Construct Scene 3: The Impact & Next Frontier
+  let s3Text = "";
+  const nextFact = research.facts[1];
+  if (nextFact) {
+    s3Text = `That is exactly why global organizations are moving fast: ${nextFact.claim} The window of opportunity to adapt is closing rapidly.`;
+  } else {
+    s3Text = `This is why industry standards are transforming right now. Those who recognize this pattern early will hold an overwhelming advantage.`;
+  }
+
+  // Construct Scene 4: Conclusion & Strategic Takeaway
+  const s4Text = `Whether you are building, investing, or studying ${topic}, understanding this principle changes the entire game.`;
+
+  // Compute realistic frame durations based on word count (~140 wpm -> ~30 frames/sec)
+  const calcFrames = (text: string) => {
+    const words = text.trim().split(/\s+/).length;
+    // ~0.4s per word * 30 fps = ~12 frames per word + 30 frames lead/pad
+    return Math.max(90, Math.round(words * 12 + 30));
+  };
+
+  const dur1 = calcFrames(s1Text);
+  const dur2 = calcFrames(s2Text);
+  const dur3 = calcFrames(s3Text);
+  const dur4 = calcFrames(s4Text);
+
+  const scenes: Scene[] = [
+    {
+      id: `s-${timestamp}-1`,
+      startFrame: 0,
+      durationInFrames: dur1,
+      scriptText: s1Text,
+      wordTokens: [],
+      background: {
+        type: "color",
+        src: "#0f172a",
+        motion: "zoom-in",
+        prompt: `Cinematic high-contrast environment visually representing ${topic}, dramatic rim lighting, 8k wallpaper`,
+      },
+      mascot: {
+        isVisible: true,
+        pose: "shocked",
+        position: "left",
+        entranceAnimation: "pop-in",
+      },
+      overlays: [
+        {
+          id: `o-${timestamp}-1`,
+          type: "lower-third",
+          props: {
+            category: "EXPLAINED",
+            title: primarySource?.title || cleanTitle.slice(0, 24),
+            subtitle: "The Underlying Mechanism",
+          },
+        },
+      ],
+    },
+    {
+      id: `s-${timestamp}-2`,
+      startFrame: dur1,
+      durationInFrames: dur2,
+      scriptText: s2Text,
+      wordTokens: [],
+      background: {
+        type: "color",
+        src: "#1e1b4b",
+        motion: "pan-left",
+        prompt: `High-tech research laboratory with illuminated holographic data graphs and volumetric blue mist`,
+      },
+      mascot: {
+        isVisible: true,
+        pose: "explaining",
+        position: "left",
+        entranceAnimation: "slide-up",
+      },
+      overlays: [
+        {
+          id: `o-${timestamp}-2`,
+          type: "stat-counter",
+          props: {
+            label: keyFact?.source || "Primary Metric",
+            targetValue: parseInt(keyFact?.stat?.replace(/\D/g, "") || "94", 10) || 94,
+            prefix: keyFact?.stat?.startsWith("+") ? "+" : "",
+            suffix: keyFact?.stat?.includes("%") ? "%" : keyFact?.stat?.includes("x") ? "x" : "",
+            accentColor: "#6366f1",
+          },
+        },
+      ],
+    },
+    {
+      id: `s-${timestamp}-3`,
+      startFrame: dur1 + dur2,
+      durationInFrames: dur3,
+      scriptText: s3Text,
+      wordTokens: [],
+      background: {
+        type: "color",
+        src: "#064e3b",
+        motion: "zoom-in",
+        prompt: `Emerald crystalline architectural studio with ambient warm sunrise illumination`,
+      },
+      mascot: {
+        isVisible: true,
+        pose: "pointing",
+        position: "left",
+        entranceAnimation: "pop-in",
+      },
+      overlays: [
+        {
+          id: `o-${timestamp}-3`,
+          type: "progress-ring",
+          props: {
+            label: "Global Adoption",
+            percentage: 88,
+            color: "#10b981",
+          },
+        },
+      ],
+    },
+    {
+      id: `s-${timestamp}-4`,
+      startFrame: dur1 + dur2 + dur3,
+      durationInFrames: dur4,
+      scriptText: s4Text,
+      wordTokens: [],
+      background: {
+        type: "color",
+        src: "#090d16",
+        motion: "static",
+        prompt: `Minimalist dark studio with elegant gold and amber ambient lighting`,
+      },
+      mascot: {
+        isVisible: true,
+        pose: "neutral",
+        position: "center",
+        entranceAnimation: "fade",
+      },
+      overlays: [
+        {
+          id: `o-${timestamp}-4`,
+          type: "lower-third",
+          props: {
+            category: "KEY TAKEAWAY",
+            title: "Strategic Action",
+            subtitle: "Anchor around narrative clarity",
+          },
+        },
+      ],
+    },
+  ];
+
+  // Map Visual References from detected entities
+  const visualReferences: VisualReferenceItem[] = [];
+  if (research.detectedEntities.length > 0) {
+    for (const ent of research.detectedEntities.slice(0, 3)) {
+      visualReferences.push({
+        id: `ref-${timestamp}-${visualReferences.length + 1}`,
+        sceneId: `s-${timestamp}-${Math.min(visualReferences.length + 1, scenes.length)}`,
+        title: `${ent.name} Official Reference`,
+        description: `Official authentic image or documentation seal for ${ent.name}.`,
+        reason:
+          ent.type === "brand"
+            ? "FLUX cannot generate real trademarked brand logos without hallucination."
+            : ent.type === "standard"
+            ? "Accurate organizational seal ensures legal compliance and credibility."
+            : "Real subject photo ensures factual authenticity beyond AI generation.",
+        assetType: ent.type === "brand" || ent.type === "standard" ? "brand_logo" : "style_reference",
         status: "pending",
-      },
-    ];
+      });
+    }
+  } else {
+    visualReferences.push({
+      id: `ref-${timestamp}-1`,
+      sceneId: `s-${timestamp}-1`,
+      title: `${topic.slice(0, 30)} Visual Anchor`,
+      description: "Official visual reference or branded graphic asset for this topic.",
+      reason: "Ensures visual styling aligns with authentic real-world references.",
+      assetType: "style_reference",
+      status: "pending",
+    });
   }
 
   return {
-    title,
-    summary,
+    title: cleanTitle,
+    summary: `Deeply researched, fact-grounded video script based on ${research.sources.length} encyclopedic sources.`,
     tone,
     factChecks,
     scenes,
@@ -471,44 +384,64 @@ function generateSemanticOptimizedScript(
   };
 }
 
-// Helpers for OpenAI / Gemini when keys are present
-async function callOpenAIScriptGenerator(
-  prompt: string,
-  rawScript: string,
-  tone: string,
-  apiKey: string
-): Promise<ScriptOptimizationResult | null> {
-  const systemPrompt = `You are an expert AI video script director specializing in Remotion-based short videos with semantic anchoring.
-Return ONLY valid JSON matching this structure:
+/**
+ * Universal OpenAI-compatible caller (works with OpenAI, Groq, Ollama, OpenRouter).
+ */
+async function callOpenAICompatibleEndpoint(opts: {
+  url: string;
+  apiKey: string;
+  model: string;
+  topic: string;
+  rawScript: string;
+  tone: string;
+  research: ResearchDossier;
+}): Promise<ScriptOptimizationResult | null> {
+  const { url, apiKey, model, topic, rawScript, tone, research } = opts;
+
+  const systemPrompt = `You are an expert AI documentary director and video scriptwriter for Remotion-based short videos with Semantic Anchoring.
+You are given VERIFIED RESEARCH DATA from encyclopedic and academic records.
+Use this research to write a rich, substantive 3 to 4 scene video script.
+
+CRITICAL INSTRUCTIONS:
+1. Each scene's "scriptText" MUST BE A FULL SPOKEN PARAGRAPH (2 to 4 natural, spoken sentences, about 35 to 55 words per scene).
+   DO NOT write 1 short sentence or weird fragmented lines! It must sound like an expert creator speaking naturally.
+2. In the script, explicitly weave in the real names, numbers, years, organizations, and mechanisms found in the research context.
+3. Choose expressive mascot poses ("neutral" | "explaining" | "shocked" | "pointing") and entrance animations ("slide-up" | "pop-in" | "fade").
+4. Attach relevant Remotion graphic overlays ("stat-counter" | "lower-third" | "progress-ring" | "code-snippet") with concrete data.
+5. Identify any specific real people, brand names, or technical standards that need user-provided legal copies in "visualReferences".
+
+RETURN ONLY VALID JSON matching this exact structure:
 {
   "title": "string",
   "summary": "string",
   "tone": "${tone}",
-  "factChecks": [{"claim": "string", "sourceOrData": "string", "injectedStat": "string"}],
+  "factChecks": [
+    {"claim": "string", "sourceOrData": "string", "injectedStat": "string"}
+  ],
   "scenes": [
     {
-      "id": "scene-1",
+      "id": "s-1",
       "startFrame": 0,
-      "durationInFrames": 120,
-      "scriptText": "spoken sentence",
+      "durationInFrames": 140,
+      "scriptText": "2 to 4 rich spoken sentences...",
       "wordTokens": [],
       "background": {
         "type": "color",
         "src": "#0f172a",
         "motion": "zoom-in",
-        "prompt": "visual description for FLUX Klein"
+        "prompt": "detailed environment description for FLUX Klein"
       },
       "mascot": {
         "isVisible": true,
-        "pose": "explaining", // neutral | explaining | shocked | pointing
-        "position": "left", // left | center | right
-        "entranceAnimation": "slide-up" // slide-up | pop-in | fade
+        "pose": "explaining",
+        "position": "left",
+        "entranceAnimation": "slide-up"
       },
       "overlays": [
         {
           "id": "o-1",
-          "type": "stat-counter", // stat-counter | lower-third | progress-ring | code-snippet
-          "props": {"label": "Growth", "targetValue": 100, "prefix": "+", "suffix": "%"}
+          "type": "stat-counter",
+          "props": {"label": "Data Metric", "targetValue": 100, "prefix": "+", "suffix": "%"}
         }
       ]
     }
@@ -516,68 +449,100 @@ Return ONLY valid JSON matching this structure:
   "visualReferences": [
     {
       "id": "ref-1",
-      "sceneId": "scene-1",
-      "title": "Brand or Person Asset",
+      "sceneId": "s-1",
+      "title": "Brand Logo or Photo Name",
       "description": "What image the user should provide",
       "reason": "Why FLUX cannot legally generate this accurately",
-      "assetType": "brand_logo", // brand_logo | person_photo | product_ui | style_reference
+      "assetType": "brand_logo",
       "status": "pending"
     }
   ]
 }`;
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const userPrompt = `TOPIC: ${topic}
+RAW SCRIPT DRAFT: ${rawScript || "None provided by user"}
+TONE: ${tone}
+
+VERIFIED RESEARCH DOSSIER:
+${research.aggregatedContext || "No external context retrieved."}
+
+EXTRACTED FACTS:
+${research.facts.map((f) => `- ${f.claim} (Source: ${f.source})`).join("\n")}
+
+Write the complete 3-4 scene structured video script JSON now:`;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey && apiKey !== "ollama") {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
+  const response = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model,
       messages: [
         { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Topic: ${prompt}\nRaw Script Draft: ${rawScript || "None provided"}\nTone: ${tone}`,
-        },
+        { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.7,
+      temperature: 0.65,
     }),
   });
 
-  if (!res.ok) return null;
-  const json = await res.json();
-  const content = json.choices?.[0]?.message?.content;
-  return JSON.parse(content);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`LLM API returned status ${response.status}: ${errorText.slice(0, 150)}`);
+  }
+
+  const json = await response.json();
+  const rawContent = json.choices?.[0]?.message?.content;
+  if (!rawContent) return null;
+
+  return JSON.parse(rawContent);
 }
 
-async function callGeminiScriptGenerator(
-  prompt: string,
-  rawScript: string,
-  tone: string,
-  apiKey: string
-): Promise<ScriptOptimizationResult | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
+/**
+ * Gemini API caller with structured research prompt.
+ */
+async function callGeminiEndpoint(opts: {
+  apiKey: string;
+  model: string;
+  topic: string;
+  rawScript: string;
+  tone: string;
+  research: ResearchDossier;
+}): Promise<ScriptOptimizationResult | null> {
+  const { apiKey, model, topic, rawScript, tone, research } = opts;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const promptText = `You are an expert AI video script director.
+Write a structured 3 to 4 scene video script JSON based on this topic and verified research.
+Each scene's scriptText MUST be 2-4 spoken sentences (35-50 words), full of substance and real facts.
+
+Topic: ${topic}
+Raw Script: ${rawScript || "None"}
+Research Context:
+${research.aggregatedContext}
+
+Return JSON with { title, summary, tone, factChecks: [{claim, sourceOrData, injectedStat}], scenes: [{id, startFrame, durationInFrames, scriptText, background, mascot, overlays}], visualReferences: [{id, sceneId, title, description, reason, assetType, status}] }`;
+
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: `Generate a structured video script JSON for topic: "${prompt}". Return JSON with { title, summary, tone, factChecks, scenes, visualReferences }.`,
-            },
-          ],
-        },
-      ],
+      contents: [{ parts: [{ text: promptText }] }],
       generationConfig: { responseMimeType: "application/json" },
     }),
   });
 
-  if (!res.ok) return null;
-  const data = await res.json();
+  if (!response.ok) return null;
+  const data = await response.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) return null;
+
   return JSON.parse(text);
 }

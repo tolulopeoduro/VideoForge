@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MasterVideoState,
   Scene,
@@ -26,6 +26,13 @@ import {
   Tv2,
   Loader2,
   ExternalLink,
+  Settings,
+  Cpu,
+  Key,
+  Globe,
+  Database,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface ConversationalOnboardingProps {
@@ -47,12 +54,53 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const [tone, setTone] = useState<string>("viral");
   const [orientation, setOrientation] = useState<"9:16" | "16:9">("9:16");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [genStage, setGenStage] = useState<string>("Starting deep research...");
   const [genError, setGenError] = useState<string | null>(null);
+
+  // Model & AI Provider settings
+  const [showSettings, setShowSettings] = useState(false);
+  const [provider, setProvider] = useState<
+    "default" | "groq" | "openai" | "gemini" | "ollama" | "openrouter"
+  >("default");
+  const [apiKey, setApiKey] = useState("");
+  const [modelName, setModelName] = useState("");
+  const [customEndpoint, setCustomEndpoint] = useState("");
+
+  // Load saved API settings from localStorage
+  useEffect(() => {
+    try {
+      const savedProvider = localStorage.getItem("zt_provider");
+      const savedKey = localStorage.getItem("zt_api_key");
+      const savedModel = localStorage.getItem("zt_model");
+      const savedEndpoint = localStorage.getItem("zt_endpoint");
+      if (savedProvider) setProvider(savedProvider as any);
+      if (savedKey) setApiKey(savedKey);
+      if (savedModel) setModelName(savedModel);
+      if (savedEndpoint) setCustomEndpoint(savedEndpoint);
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const saveApiSettings = (
+    newProvider: typeof provider,
+    newKey: string,
+    newModel: string,
+    newEndpoint: string
+  ) => {
+    try {
+      localStorage.setItem("zt_provider", newProvider);
+      localStorage.setItem("zt_api_key", newKey);
+      localStorage.setItem("zt_model", newModel);
+      localStorage.setItem("zt_endpoint", newEndpoint);
+    } catch (e) {
+      // ignore
+    }
+  };
 
   // Step 2, 3, 4 Data state
   const [optimizationResult, setOptimizationResult] =
     useState<ScriptOptimizationResult | null>(null);
-  const [selectedSceneIdx, setSelectedSceneIdx] = useState(0);
 
   // Visual references user overrides
   const [referenceOverrides, setReferenceOverrides] = useState<
@@ -76,6 +124,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       text: "Why traditional multitrack video editors are dead and semantic text anchoring is the future",
       tone: "viral",
     },
+    {
+      title: "How Airplanes Fly",
+      text: "How aerodynamic lift and Bernoulli principles allow 500-ton airplanes to stay airborne",
+      tone: "technical",
+    },
   ];
 
   // Curated stock / style presets for references
@@ -85,7 +138,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     { label: "Cyber Server Mainframe", url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=600&auto=format&fit=crop&q=80" },
   ];
 
-  // Submit Step 1 to LLM backend
+  // Submit Step 1 to LLM backend with staged progress
   const handleGenerateScript = async () => {
     const textToSubmit = inputType === "prompt" ? prompt : rawScript;
     if (!textToSubmit.trim()) {
@@ -95,6 +148,19 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
     setIsGenerating(true);
     setGenError(null);
+    setGenStage("🔍 Performing deep encyclopedic research on topic...");
+
+    const stageTimer1 = setTimeout(() => {
+      setGenStage("📊 Mining technical facts, numbers & citations...");
+    }, 900);
+
+    const stageTimer2 = setTimeout(() => {
+      setGenStage("⚡ Writing full-length spoken scenes with semantic anchoring...");
+    }, 2000);
+
+    const stageTimer3 = setTimeout(() => {
+      setGenStage("🎨 Choreographing mascot poses & Remotion graphic overlays...");
+    }, 3200);
 
     try {
       const res = await fetch("/api/generate-script", {
@@ -105,6 +171,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           rawScript: inputType === "script" ? rawScript : "",
           tone,
           orientation,
+          provider,
+          apiKey,
+          modelName,
+          customEndpoint,
         }),
       });
 
@@ -118,6 +188,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     } catch (err: any) {
       setGenError(err.message || "Network error communicating with script generator.");
     } finally {
+      clearTimeout(stageTimer1);
+      clearTimeout(stageTimer2);
+      clearTimeout(stageTimer3);
       setIsGenerating(false);
     }
   };
@@ -215,7 +288,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               </span>
             </div>
             <div className="text-[11px] text-slate-400 -mt-0.5">
-              Conversational Script & Visual Planning
+              Deep Research & Semantic Script Engine
             </div>
           </div>
         </div>
@@ -223,8 +296,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         {/* Step Indicator Progress Pills */}
         <div className="hidden md:flex items-center gap-2 bg-studio-900 px-4 py-1.5 rounded-full border border-studio-800 text-xs">
           {[
-            { num: 1, label: "Idea & Script" },
-            { num: 2, label: "LLM Breakdown" },
+            { num: 1, label: "Idea & Research" },
+            { num: 2, label: "Researched Script" },
             { num: 3, label: "Visual References" },
             { num: 4, label: "Launch Studio" },
           ].map((item) => (
@@ -269,23 +342,150 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       {/* Main Form Body */}
       <div className="flex-1 max-w-4xl w-full mx-auto p-6 md:p-10 flex flex-col justify-center">
         {/* ============================================================== */}
-        {/* STEP 1: PROMPT OR SCRIPT SUBMISSION                            */}
+        {/* STEP 1: PROMPT OR SCRIPT SUBMISSION & MODEL CONFIG             */}
         {/* ============================================================== */}
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-studio-accent/15 border border-studio-accent/30 text-indigo-400 text-xs font-bold mb-3">
-                <Sparkles className="w-3.5 h-3.5" />
-                Step 1 of 4 • Conversational Ingestion
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-studio-accent/15 border border-studio-accent/30 text-indigo-400 text-xs font-bold mb-3">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Step 1 of 4 • Deep Research & Script Generation
+                </div>
+                <h1 className="text-3xl font-extrabold text-white tracking-tight">
+                  What story or topic do you want to create?
+                </h1>
+                <p className="text-slate-400 text-sm mt-1.5">
+                  ZeroTrack queries encyclopedic databases, fact-checks assertions, and writes a
+                  comprehensive multi-scene narrative script with avatar choreography.
+                </p>
               </div>
-              <h1 className="text-3xl font-extrabold text-white tracking-tight">
-                What story or message do you want to create?
-              </h1>
-              <p className="text-slate-400 text-sm mt-1.5">
-                Our LLM analyzes current narrative retention patterns, fact-checks assertions,
-                and generates an optimized scene breakdown with avatar poses and Remotion overlays.
-              </p>
+
+              {/* AI Model Settings Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowSettings(!showSettings)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-studio-800 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm"
+              >
+                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                <span>AI Model Settings</span>
+                {showSettings ? (
+                  <ChevronUp className="w-3 h-3 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                )}
+              </button>
             </div>
+
+            {/* AI Model & Research Settings Drawer */}
+            {showSettings && (
+              <div className="p-4 rounded-2xl bg-studio-900 border border-studio-700/80 space-y-4 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-white">
+                    <Settings className="w-4 h-4 text-studio-accent" />
+                    <span>LLM Engine & Research Provider</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Saved in browser localStorage
+                  </span>
+                </div>
+
+                {/* Provider selection buttons */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: "default", name: "🧠 Built-in Deep Engine", note: "Free, No API Key" },
+                    { id: "groq", name: "⚡ Groq (Llama 3.3)", note: "Ultra-fast" },
+                    { id: "openai", name: "🟢 OpenAI (GPT-4o)", note: "Industry standard" },
+                    { id: "gemini", name: "💎 Gemini (1.5 Flash)", note: "Google API" },
+                    { id: "ollama", name: "💻 Local Ollama", note: "localhost:11434" },
+                    { id: "openrouter", name: "🌐 OpenRouter", note: "Multi-model" },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        const newP = p.id as typeof provider;
+                        setProvider(newP);
+                        saveApiSettings(newP, apiKey, modelName, customEndpoint);
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                        provider === p.id
+                          ? "bg-studio-accent/20 border-studio-accent text-white shadow-sm ring-1 ring-studio-accent/50"
+                          : "bg-studio-950 border-studio-800 text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-white truncate">{p.name}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{p.note}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* API Key Input (if not default) */}
+                {provider !== "default" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-studio-800">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Key className="w-3 h-3 text-amber-400" />
+                        <span>API Key</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => {
+                          setApiKey(e.target.value);
+                          saveApiSettings(provider, e.target.value, modelName, customEndpoint);
+                        }}
+                        placeholder={
+                          provider === "groq"
+                            ? "gsk_..."
+                            : provider === "gemini"
+                            ? "AIza..."
+                            : provider === "ollama"
+                            ? "Not needed for Ollama"
+                            : "sk-..."
+                        }
+                        className="w-full bg-studio-950 border border-studio-800 focus:border-studio-accent rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300">
+                        {provider === "ollama" ? "Ollama Endpoint" : "Model Name (Optional)"}
+                      </label>
+                      {provider === "ollama" ? (
+                        <input
+                          type="text"
+                          value={customEndpoint}
+                          onChange={(e) => {
+                            setCustomEndpoint(e.target.value);
+                            saveApiSettings(provider, apiKey, modelName, e.target.value);
+                          }}
+                          placeholder="http://localhost:11434"
+                          className="w-full bg-studio-950 border border-studio-800 focus:border-studio-accent rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none font-mono"
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={modelName}
+                          onChange={(e) => {
+                            setModelName(e.target.value);
+                            saveApiSettings(provider, apiKey, e.target.value, customEndpoint);
+                          }}
+                          placeholder={
+                            provider === "groq"
+                              ? "llama-3.3-70b-versatile"
+                              : provider === "gemini"
+                              ? "gemini-1.5-flash"
+                              : "gpt-4o-mini"
+                          }
+                          className="w-full bg-studio-950 border border-studio-800 focus:border-studio-accent rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none font-mono"
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Input Mode Toggle (Prompt vs Raw Script) */}
             <div className="flex items-center gap-2 p-1 bg-studio-900 rounded-xl border border-studio-800 max-w-md">
@@ -325,8 +525,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
                 rows={inputType === "prompt" ? 4 : 7}
                 placeholder={
                   inputType === "prompt"
-                    ? "e.g. Why quantum computers will break RSA encryption, explained with simple analogies and the NIST post-quantum standard..."
-                    : "Paste your draft script here. Our LLM will format it into hook-driven scenes, inject verified statistics, and map visual overlays..."
+                    ? "e.g. Why quantum computers will break 2048-bit RSA encryption and how the NIST post-quantum migration works..."
+                    : "Paste your draft script here. Our deep research engine will analyze it, ground it with encyclopedic facts, and structure it into full-length spoken scenes..."
                 }
                 className="w-full bg-studio-900/90 border border-studio-800 focus:border-studio-accent rounded-2xl p-4 text-sm text-slate-100 placeholder-slate-500 outline-none leading-relaxed transition-all shadow-inner"
               />
@@ -437,7 +637,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               </div>
             )}
 
-            {/* Submit Button */}
+            {/* Submit Button with Live Progress State */}
             <div className="pt-2">
               <button
                 type="button"
@@ -447,13 +647,13 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               >
                 {isGenerating ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Analyzing Trends & Optimizing Script with LLM...</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                    <span>{genStage}</span>
                   </>
                 ) : (
                   <>
                     <Wand2 className="w-4 h-4" />
-                    <span>Generate & Optimize Script with LLM ➔</span>
+                    <span>Research, Fact-Check & Generate Script ➔</span>
                   </>
                 )}
               </button>
@@ -462,7 +662,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         )}
 
         {/* ============================================================== */}
-        {/* STEP 2: LLM OPTIMIZATION DISPLAY & SCENE REVIEW                */}
+        {/* STEP 2: RESEARCHED SCRIPT BREAKDOWN & SCENE REVIEW             */}
         {/* ============================================================== */}
         {step === 2 && optimizationResult && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
@@ -470,7 +670,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-2">
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  Step 2 of 4 • LLM Optimization Complete
+                  Step 2 of 4 • Deep Research & Script Breakdown Complete
                 </div>
                 <h2 className="text-2xl font-extrabold text-white">
                   {optimizationResult.title}
@@ -485,26 +685,33 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
                 className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-studio-800 bg-studio-900 hover:bg-studio-850 flex items-center gap-1.5"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Edit Prompt</span>
+                <span>Edit Topic</span>
               </button>
             </div>
 
-            {/* Fact Check / Injected Data Points Pill Box */}
+            {/* Fact Check & Research Injected Data Points */}
             {optimizationResult.factChecks && optimizationResult.factChecks.length > 0 && (
-              <div className="p-3.5 bg-studio-900/90 border border-studio-800 rounded-xl space-y-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Fact-Checked Claims & Injected Data Proof</span>
+              <div className="p-4 bg-studio-900 border border-studio-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Fact-Checked Grounding & Verified Citations</span>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Empirically Injected</span>
+                  </span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
                   {optimizationResult.factChecks.map((fc, i) => (
-                    <div key={i} className="p-2.5 bg-studio-950 rounded-lg border border-studio-800/80">
-                      <div className="font-semibold text-slate-200">"{fc.claim}"</div>
-                      <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
-                        <span className="font-mono text-indigo-400 bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-900">
+                    <div key={i} className="p-3 bg-studio-950 rounded-xl border border-studio-800">
+                      <div className="font-semibold text-slate-200 leading-snug">"{fc.claim}"</div>
+                      <div className="text-[11px] text-slate-400 mt-2 flex items-center gap-2">
+                        <span className="font-mono text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-900 font-bold">
                           {fc.injectedStat}
                         </span>
-                        <span>{fc.sourceOrData}</span>
+                        <span className="truncate">{fc.sourceOrData}</span>
                       </div>
                     </div>
                   ))}
@@ -512,77 +719,97 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               </div>
             )}
 
-            {/* Scene Cards Carousel / Feed */}
+            {/* Substantive Scene Cards Feed */}
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs font-bold text-slate-300 uppercase tracking-wider">
-                <span>Optimized Scene Breakdown ({optimizationResult.scenes.length} Scenes)</span>
-                <span className="text-slate-500 text-[11px]">Click text to tweak</span>
+                <span>Researched Video Scenes ({optimizationResult.scenes.length} Scenes)</span>
+                <span className="text-slate-400 text-[11px] font-normal">
+                  Total duration: ~
+                  {(
+                    optimizationResult.scenes.reduce((acc, s) => acc + s.durationInFrames, 0) /
+                    30
+                  ).toFixed(1)}
+                  s
+                </span>
               </div>
 
-              <div className="space-y-3">
-                {optimizationResult.scenes.map((scene, idx) => (
-                  <div
-                    key={scene.id}
-                    className="p-4 rounded-xl border border-studio-800 bg-studio-900/60 hover:bg-studio-900 transition-colors space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-md bg-studio-accent text-white flex items-center justify-center text-xs font-bold">
-                          {idx + 1}
-                        </span>
-                        <span className="text-xs font-bold text-slate-200">
-                          Scene {idx + 1}
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-mono bg-studio-950 px-2 py-0.5 rounded border border-studio-800">
-                          ~{(scene.durationInFrames / 30).toFixed(1)}s
-                        </span>
-                      </div>
+              <div className="space-y-4">
+                {optimizationResult.scenes.map((scene, idx) => {
+                  const words = scene.scriptText.trim().split(/\s+/).filter(Boolean).length;
+                  const durationSec = (scene.durationInFrames / 30).toFixed(1);
 
-                      <div className="flex items-center gap-2">
-                        {/* Mascot Pose Badge */}
-                        <span className="flex items-center gap-1 text-[11px] font-medium text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
-                          <Smile className="w-3 h-3" />
-                          <span>{scene.mascot.pose}</span>
-                        </span>
-
-                        {/* Overlays Badge */}
-                        {scene.overlays.length > 0 && (
-                          <span className="flex items-center gap-1 text-[11px] font-medium text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/30">
-                            <Layers className="w-3 h-3" />
-                            <span>{scene.overlays[0].type}</span>
+                  return (
+                    <div
+                      key={scene.id}
+                      className="p-5 rounded-2xl border border-studio-800 bg-studio-900/80 hover:bg-studio-900 transition-colors space-y-3 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-6 h-6 rounded-lg bg-studio-accent text-white flex items-center justify-center text-xs font-bold">
+                            {idx + 1}
                           </span>
-                        )}
+                          <span className="text-xs font-bold text-white">
+                            Scene {idx + 1}
+                          </span>
+                          <span className="text-[11px] text-slate-300 font-mono bg-studio-950 px-2 py-0.5 rounded border border-studio-800">
+                            {durationSec}s ({words} words)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Mascot Pose Badge */}
+                          <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                            <Smile className="w-3 h-3" />
+                            <span className="capitalize">{scene.mascot.pose}</span>
+                          </span>
+
+                          {/* Overlays Badge */}
+                          {scene.overlays.length > 0 && (
+                            <span className="flex items-center gap-1.5 text-[11px] font-medium text-indigo-300 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
+                              <Layers className="w-3 h-3 text-indigo-400" />
+                              <span className="capitalize">
+                                {scene.overlays[0].type.replace("-", " ")}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Full-Length Spoken Script Textarea */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-400">
+                          Spoken Voiceover Paragraph (Click to edit text):
+                        </label>
+                        <textarea
+                          value={scene.scriptText}
+                          onChange={(e) => handleUpdateSceneScript(scene.id, e.target.value)}
+                          rows={3}
+                          className="w-full bg-studio-950 border border-studio-800 focus:border-studio-accent rounded-xl p-3 text-xs text-slate-100 outline-none resize-none leading-relaxed shadow-inner"
+                        />
+                      </div>
+
+                      {/* Visual Environment Description */}
+                      <div className="text-[11px] text-slate-400 flex items-center gap-2 bg-studio-950/90 p-2.5 rounded-xl border border-studio-800">
+                        <ImageIcon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                        <span className="truncate">
+                          <strong>FLUX Environment:</strong>{" "}
+                          {scene.background.prompt || "Minimalist studio"}
+                        </span>
                       </div>
                     </div>
-
-                    {/* Script text editor */}
-                    <textarea
-                      value={scene.scriptText}
-                      onChange={(e) => handleUpdateSceneScript(scene.id, e.target.value)}
-                      rows={2}
-                      className="w-full bg-studio-950 border border-studio-800 focus:border-studio-accent rounded-lg p-2.5 text-xs text-slate-100 outline-none resize-none leading-relaxed"
-                    />
-
-                    {/* FLUX Background Description */}
-                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5 bg-studio-950/80 p-2 rounded-lg border border-studio-800/60">
-                      <ImageIcon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span className="truncate">
-                        <strong>Environment:</strong> {scene.background.prompt || "Minimalist studio"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Next Step Button */}
+            {/* Navigation buttons */}
             <div className="flex items-center justify-between pt-4 border-t border-studio-800">
               <button
                 type="button"
                 onClick={() => setStep(1)}
                 className="px-4 py-2 rounded-lg border border-studio-800 text-xs font-semibold text-slate-300 hover:text-white"
               >
-                Back
+                Back to Research Input
               </button>
 
               <button
@@ -737,7 +964,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
                 onClick={() => setStep(2)}
                 className="px-4 py-2 rounded-lg border border-studio-800 text-xs font-semibold text-slate-300 hover:text-white"
               >
-                Back to Breakdown
+                Back to Researched Script
               </button>
 
               <button
@@ -782,9 +1009,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
                   <div className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                     <div>
-                      <div className="text-xs font-bold text-white">Narrative Script Architecture</div>
+                      <div className="text-xs font-bold text-white">Researched Narrative Script</div>
                       <div className="text-[11px] text-slate-400">
-                        {optimizationResult.scenes.length} scenes structured with hook-and-retain pacing
+                        {optimizationResult.scenes.length} full-length spoken scenes with verified facts
                       </div>
                     </div>
                   </div>
