@@ -17,7 +17,30 @@ ZeroTrack replaces traditional complex multitrack video editors with **"Semantic
 
 ---
 
-## 📐 Universal JSON State
+## 🧭 The Conversational Onboarding Workflow (Step-by-Step)
+
+Before landing in the 3-panel studio, ZeroTrack guides users through a 4-step conversational setup:
+
+```
+[ Step 1: Idea / Script ] ➔ [ Step 2: LLM Optimization ] ➔ [ Step 3: Visual References ] ➔ [ Step 4: Pre-Flight Check & Launch ]
+```
+
+1. **Step 1: Prompt or Draft Submission**:
+   - Submit a raw topic prompt or paste an unformatted script draft.
+   - Choose tone & pacing (*Viral Hook*, *Tech Deep Dive*, *Product Launch*, *Case Study*).
+   - Select canvas format (9:16 Vertical for TikTok/Shorts or 16:9 Landscape for YouTube).
+2. **Step 2: LLM Script Optimization & Fact Injection**:
+   - Restructures raw thoughts into high-retention scenes (Hook ➔ Proof ➔ CTA).
+   - Injects verified data points, statistics, and fact-checked citations.
+   - Assigns brand mascot avatar poses (`neutral`, `explaining`, `shocked`, `pointing`) and Remotion graphic overlays (`stat-counter`, `lower-third`, `progress-ring`, `code-snippet`).
+3. **Step 3: Visual References & Legal Trademark Assets**:
+   - Detects specific people, brands, logos, or proprietary software UIs that FLUX Klein cannot legally or accurately generate.
+   - Allows users to provide authentic legal copies (image URLs, custom uploads) or select from curated royalty-free presets.
+4. **Step 4: Pre-Flight Check & Studio Launch**:
+   - Validates script cadence, avatar choreography, overlay readiness, and canvas resolution.
+   - Loads the Universal JSON State into the studio and triggers Kokoro-82M TTS and Faster-Whisper audio alignment automatically.
+
+---
 
 The entire video is represented by a single immutable TypeScript schema (`types/schema.ts`):
 

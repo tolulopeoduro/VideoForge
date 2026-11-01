@@ -16,6 +16,7 @@ interface NavbarProps {
   onUpdateState: (updater: (prev: MasterVideoState) => MasterVideoState) => void;
   onTriggerSync: () => void;
   onOpenExport: () => void;
+  onOpenWizard?: () => void;
   isSyncing: boolean;
   isExporting: boolean;
 }
@@ -25,6 +26,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onUpdateState,
   onTriggerSync,
   onOpenExport,
+  onOpenWizard,
   isSyncing,
   isExporting,
 }) => {
@@ -78,6 +80,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           }
           className="bg-transparent hover:bg-studio-900 focus:bg-studio-900 border border-transparent focus:border-studio-700 text-slate-200 text-sm font-semibold rounded-lg px-2.5 py-1 outline-none transition-colors w-56 truncate"
         />
+
+        {/* Re-enter AI Script Wizard Button */}
+        {onOpenWizard && (
+          <button
+            onClick={onOpenWizard}
+            title="Create a new script or re-run AI conversational setup"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-studio-accent/15 hover:bg-studio-accent/25 border border-studio-accent/30 text-indigo-300 hover:text-white text-xs font-bold transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>AI Script Wizard</span>
+          </button>
+        )}
       </div>
 
       {/* Center Timing & Stats Badge */}

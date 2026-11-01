@@ -1,7 +1,13 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Player, PlayerRef } from "@remotion/player";
+import dynamic from "next/dynamic";
+import type { PlayerRef } from "@remotion/player";
 import { MasterVideoState } from "@/types/schema";
 import { ZeroTrackComposition } from "@/remotion/ZeroTrackComposition";
+
+const Player = dynamic(
+  () => import("@remotion/player").then((mod) => mod.Player),
+  { ssr: false }
+);
 import {
   Play,
   Pause,
@@ -132,7 +138,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
         >
           <Player
             ref={playerRef}
-            component={ZeroTrackComposition}
+            component={ZeroTrackComposition as any}
             inputProps={{ state }}
             durationInFrames={totalFrames}
             compositionWidth={state.metadata.width}

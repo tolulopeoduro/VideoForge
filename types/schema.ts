@@ -57,6 +57,30 @@ export interface GraphicOverlay {
   props: Record<string, any>;
 }
 
+export interface VisualReferenceItem {
+  id: string;
+  sceneId: string;
+  title: string;
+  description: string;
+  reason: string; // e.g. "FLUX cannot generate real trademarked logos or real person likenesses accurately"
+  assetType: "brand_logo" | "person_photo" | "product_ui" | "style_reference";
+  providedUrl?: string;
+  status: "pending" | "provided" | "using_ai_fallback";
+}
+
+export interface ScriptOptimizationResult {
+  title: string;
+  summary: string;
+  tone: string;
+  factChecks: Array<{
+    claim: string;
+    sourceOrData: string;
+    injectedStat?: string;
+  }>;
+  scenes: Scene[];
+  visualReferences: VisualReferenceItem[];
+}
+
 export interface PipelineProgressEvent {
   type: "progress" | "complete" | "error";
   stage?: "synthesizing_speech" | "transcribing_alignment" | "packaging_assets" | "done";

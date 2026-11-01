@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { MasterVideoState, PipelineProgressEvent } from "@/types/schema";
+import { MasterVideoState, PipelineProgressEvent, Scene } from "@/types/schema";
 import { DEFAULT_DEMO_STATE } from "@/remotion/Root";
 import { Navbar } from "@/components/Navbar";
 import { LeftScriptPanel } from "@/components/panels/LeftScriptPanel";
@@ -9,8 +9,12 @@ import { CenterPlayerPanel } from "@/components/panels/CenterPlayerPanel";
 import { RightInspectorPanel } from "@/components/panels/RightInspectorPanel";
 import { SyncProgressModal } from "@/components/modals/SyncProgressModal";
 import { ExportModal } from "@/components/modals/ExportModal";
+import { ConversationalOnboarding } from "@/components/wizard/ConversationalOnboarding";
 
 export default function StudioPage() {
+  // Conversational Wizard is shown first, before user enters studio
+  const [viewMode, setViewMode] = useState<"wizard" | "studio">("wizard");
+
   const [state, setState] = useState<MasterVideoState>(DEFAULT_DEMO_STATE);
   const [selectedSceneId, setSelectedSceneId] = useState<string>(
     DEFAULT_DEMO_STATE.scenes[0]?.id || "scene-1"
@@ -21,7 +25,8 @@ export default function StudioPage() {
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
 
   // Trigger Python Child Process Pipeline via IPC
-  const handleTriggerSync = async () => {
+  const handleTriggerSync = async (scenesToSync?: Scene[]) => {
+    const scenes = scenesToSync || state.scenes;
     setIsSyncing(true);
     setIsSyncModalOpen(true);
     setSyncEvent({
@@ -36,7 +41,7 @@ export default function StudioPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scenes: state.scenes,
+          scenes,
         }),
       });
 
@@ -93,14 +98,37 @@ export default function StudioPage() {
     }
   };
 
+  // Called when the user completes the 4-step conversational wizard
+  const handleOnboardingComplete = (optimizedState: MasterVideoState) => {
+    setState(optimizedState);
+    if (optimizedState.scenes.length > 0) {
+      setSelectedSceneId(optimizedState.scenes[0].id);
+    }
+    setViewMode("studio");
+    // Trigger speech synthesis & timing lock for the new scenes
+    handleTriggerSync(optimizedState.scenes);
+  };
+
+  // 1. If in conversational onboarding mode, show the 4-step wizard
+  if (viewMode === "wizard") {
+    return (
+      <ConversationalOnboarding
+        onComplete={handleOnboardingComplete}
+        onSkipToStudio={() => setViewMode("studio")}
+      />
+    );
+  }
+
+  // 2. Otherwise render the 3-panel studio
   return (
     <div className="h-screen w-screen flex flex-col bg-studio-950 overflow-hidden font-sans">
       {/* Top Studio Navigation */}
       <Navbar
         state={state}
         onUpdateState={setState}
-        onTriggerSync={handleTriggerSync}
+        onTriggerSync={() => handleTriggerSync()}
         onOpenExport={() => setIsExportModalOpen(true)}
+        onOpenWizard={() => setViewMode("wizard")}
         isSyncing={isSyncing}
         isExporting={false}
       />
@@ -113,7 +141,7 @@ export default function StudioPage() {
           selectedSceneId={selectedSceneId}
           onSelectScene={setSelectedSceneId}
           onUpdateState={setState}
-          onTriggerSync={handleTriggerSync}
+          onTriggerSync={() => handleTriggerSync()}
           isSyncing={isSyncing}
         />
 
