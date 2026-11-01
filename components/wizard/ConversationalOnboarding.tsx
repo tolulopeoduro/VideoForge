@@ -107,17 +107,27 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     Record<string, { url: string; status: VisualReferenceItem["status"] }>
   >({});
 
-  // Quick prompt suggestions
+  // Quick prompt suggestions across diverse popular domains
   const PROMPT_SUGGESTIONS = [
+    {
+      title: "Manchester United Treble",
+      text: "How Manchester United won the historic 1999 treble in stoppage time and why Fergie Time became football legend",
+      tone: "dramatic",
+    },
+    {
+      title: "Wall Street Flash Crash",
+      text: "How algorithmic high-frequency trading wiped out one trillion dollars in thirty-six minutes during the 2010 Flash Crash",
+      tone: "dramatic",
+    },
+    {
+      title: "Fall of Roman Republic",
+      text: "How the Roman Republic collapsed into an Empire in 44 BC and how Julius Caesar reshaped world history",
+      tone: "informative",
+    },
     {
       title: "Quantum vs RSA",
       text: "Why Quantum Computing will break 2048-bit RSA encryption and how NIST post-quantum migration works",
       tone: "technical",
-    },
-    {
-      title: "The 85% Rule",
-      text: "Why 85% of startup manual busywork should be replaced by autonomous AI pipelines",
-      tone: "viral",
     },
     {
       title: "Death of Video Editors",
@@ -131,10 +141,13 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     },
   ];
 
-  // Curated stock / style presets for references
+  // Curated stock / style presets for references across major domains
   const STOCK_PRESETS = [
+    { label: "Sports Stadium Arena", url: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop&q=80" },
+    { label: "Wall Street & Markets", url: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800&auto=format&fit=crop&q=80" },
+    { label: "Colosseum & Ancient Rome", url: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&auto=format&fit=crop&q=80" },
+    { label: "Deep Space & Nebula", url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80" },
     { label: "Tech Shield Badge", url: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=600&auto=format&fit=crop&q=80" },
-    { label: "Quantum Dilution Lab", url: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&auto=format&fit=crop&q=80" },
     { label: "Cyber Server Mainframe", url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=600&auto=format&fit=crop&q=80" },
   ];
 
@@ -195,14 +208,26 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }
   };
 
-  // Update a scene's script text during step 2
+  // Update a scene's script text during step 2 with frame recalculation
   const handleUpdateSceneScript = (sceneId: string, newText: string) => {
     if (!optimizationResult) return;
+    const words = newText.trim().split(/\s+/).filter(Boolean);
+    const estDuration = Math.max(75, Math.round((Math.max(words.length, 1) / 2.7) * 30));
+
+    const nextScenes = optimizationResult.scenes.map((s) =>
+      s.id === sceneId ? { ...s, scriptText: newText, durationInFrames: estDuration } : s
+    );
+
+    let curr = 0;
+    const reindexed = nextScenes.map((s) => {
+      const updated = { ...s, startFrame: curr };
+      curr += s.durationInFrames;
+      return updated;
+    });
+
     setOptimizationResult({
       ...optimizationResult,
-      scenes: optimizationResult.scenes.map((s) =>
-        s.id === sceneId ? { ...s, scriptText: newText } : s
-      ),
+      scenes: reindexed,
     });
   };
 

@@ -19,49 +19,81 @@ export const OverlaysLayer: React.FC<OverlaysLayerProps> = ({ overlays, mascot }
     return null;
   }
 
-  // Position overlay opposite to mascot or centered
-  let overlayAlignment: React.CSSProperties = {
+  const topOverlays = overlays.filter((o) => o.type !== "lower-third");
+  const lowerThirdOverlays = overlays.filter((o) => o.type === "lower-third");
+
+  // Top overlays placement (opposite to mascot)
+  let topAlignment: React.CSSProperties = {
     position: "absolute",
-    top: isPortrait ? "18%" : "14%",
-    right: isPortrait ? "8%" : "12%",
+    top: isPortrait ? "15%" : "12%",
+    right: isPortrait ? "6%" : "10%",
     zIndex: 25,
   };
 
   if (mascot.isVisible && mascot.position === "right") {
-    overlayAlignment = {
+    topAlignment = {
       position: "absolute",
-      top: isPortrait ? "18%" : "14%",
-      left: isPortrait ? "8%" : "12%",
+      top: isPortrait ? "15%" : "12%",
+      left: isPortrait ? "6%" : "10%",
       zIndex: 25,
     };
   } else if (!mascot.isVisible) {
-    overlayAlignment = {
+    topAlignment = {
       position: "absolute",
-      top: isPortrait ? "22%" : "18%",
+      top: isPortrait ? "18%" : "14%",
       left: "50%",
       transform: "translateX(-50%)",
       zIndex: 25,
     };
   }
 
+  // Lower Third overlays placement (situated above bottom captions)
+  let lowerAlignment: React.CSSProperties = {
+    position: "absolute",
+    bottom: isPortrait ? 400 : 130,
+    left: isPortrait ? "6%" : "8%",
+    zIndex: 26,
+  };
+
+  if (mascot.isVisible && mascot.position === "left") {
+    lowerAlignment = {
+      position: "absolute",
+      bottom: isPortrait ? 400 : 130,
+      right: isPortrait ? "6%" : "8%",
+      zIndex: 26,
+    };
+  }
+
   return (
-    <div style={overlayAlignment}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {overlays.map((overlay) => {
-          switch (overlay.type) {
-            case "stat-counter":
-              return <StatCounterOverlay key={overlay.id} {...overlay.props} />;
-            case "lower-third":
-              return <LowerThirdOverlay key={overlay.id} {...overlay.props} />;
-            case "progress-ring":
-              return <ProgressRingOverlay key={overlay.id} {...overlay.props} />;
-            case "code-snippet":
-              return <CodeSnippetOverlay key={overlay.id} {...overlay.props} />;
-            default:
-              return null;
-          }
-        })}
-      </div>
-    </div>
+    <>
+      {topOverlays.length > 0 && (
+        <div style={topAlignment}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {topOverlays.map((overlay) => {
+              switch (overlay.type) {
+                case "stat-counter":
+                  return <StatCounterOverlay key={overlay.id} {...overlay.props} />;
+                case "progress-ring":
+                  return <ProgressRingOverlay key={overlay.id} {...overlay.props} />;
+                case "code-snippet":
+                  return <CodeSnippetOverlay key={overlay.id} {...overlay.props} />;
+                default:
+                  return null;
+              }
+            })}
+          </div>
+        </div>
+      )}
+
+      {lowerThirdOverlays.length > 0 && (
+        <div style={lowerAlignment}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {lowerThirdOverlays.map((overlay) => (
+              <LowerThirdOverlay key={overlay.id} {...overlay.props} />
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 };

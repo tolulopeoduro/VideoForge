@@ -13,6 +13,10 @@ import {
   Smile,
   Layers,
   Wand2,
+  Trophy,
+  TrendingUp,
+  Scroll,
+  Cpu,
 } from "lucide-react";
 
 interface LeftScriptPanelProps {
@@ -33,10 +37,40 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
   isSyncing,
 }) => {
   const handleScriptChange = (sceneId: string, newText: string) => {
-    onUpdateState((prev) => ({
-      ...prev,
-      scenes: prev.scenes.map((s) => (s.id === sceneId ? { ...s, scriptText: newText } : s)),
-    }));
+    onUpdateState((prev) => {
+      const isVoiceLocked = Boolean(prev.audio.voiceTrackUrl);
+      const nextScenes = prev.scenes.map((s) => {
+        if (s.id !== sceneId) return s;
+        if (isVoiceLocked) {
+          return { ...s, scriptText: newText };
+        }
+        // If not locked, re-estimate frames based on spoken cadence (~2.7 words/sec @ 30fps)
+        const words = newText.trim().split(/\s+/).filter(Boolean);
+        const estDuration = Math.max(75, Math.round((Math.max(words.length, 1) / 2.7) * 30));
+        return {
+          ...s,
+          scriptText: newText,
+          durationInFrames: estDuration,
+        };
+      });
+
+      // Recalculate startFrames sequentially
+      let curr = 0;
+      const reindexed = nextScenes.map((s) => {
+        const updated = { ...s, startFrame: curr };
+        curr += s.durationInFrames;
+        return updated;
+      });
+
+      return {
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          totalDurationInFrames: Math.max(90, curr),
+        },
+        scenes: reindexed,
+      };
+    });
   };
 
   const handleAddScene = () => {
@@ -79,7 +113,6 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
 
     onUpdateState((prev) => {
       const filtered = prev.scenes.filter((s) => s.id !== sceneId);
-      // recalculate frame starts
       let curr = 0;
       const reindexed = filtered.map((s) => {
         const sCopy = { ...s, startFrame: curr };
@@ -88,7 +121,7 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
       });
       return {
         ...prev,
-        metadata: { ...prev.metadata, totalDurationInFrames: curr },
+        metadata: { ...prev.metadata, totalDurationInFrames: Math.max(90, curr) },
         scenes: reindexed,
       };
     });
@@ -110,7 +143,19 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
       const idx = prev.scenes.findIndex((s) => s.id === scene.id);
       const nextScenes = [...prev.scenes];
       nextScenes.splice(idx + 1, 0, dup);
-      return { ...prev, scenes: nextScenes };
+
+      let curr = 0;
+      const reindexed = nextScenes.map((s) => {
+        const sCopy = { ...s, startFrame: curr };
+        curr += s.durationInFrames;
+        return sCopy;
+      });
+
+      return {
+        ...prev,
+        metadata: { ...prev.metadata, totalDurationInFrames: Math.max(90, curr) },
+        scenes: reindexed,
+      };
     });
     onSelectScene(newId);
   };
@@ -125,67 +170,151 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
       const temp = copy[idx];
       copy[idx] = copy[targetIdx];
       copy[targetIdx] = temp;
-      return { ...prev, scenes: copy };
+
+      // Re-index frame starts sequentially
+      let curr = 0;
+      const reindexed = copy.map((s) => {
+        const sCopy = { ...s, startFrame: curr };
+        curr += s.durationInFrames;
+        return sCopy;
+      });
+
+      return {
+        ...prev,
+        metadata: { ...prev.metadata, totalDurationInFrames: Math.max(90, curr) },
+        scenes: reindexed,
+      };
     });
   };
 
-  // Preset Script Templates for quick one-click inspiration
-  const applyPresetTemplate = (type: "pitch" | "tech" | "case_study") => {
+  // Preset Script Templates for quick one-click inspiration across diverse genres
+  const applyPresetTemplate = (type: "sports" | "finance" | "history" | "tech" | "pitch") => {
     let newScenes: Scene[] = [];
-    if (type === "pitch") {
+    const timestamp = Date.now();
+
+    if (type === "sports") {
       newScenes = [
         {
-          id: `s-${Date.now()}-1`,
+          id: `s-${timestamp}-1`,
           startFrame: 0,
           durationInFrames: 110,
-          scriptText: "Traditional video editing is broken. Timelines are too complex and tedious.",
+          scriptText: "Old Trafford under the lights. The theatre where impossible comebacks become legend.",
           wordTokens: [],
-          background: { type: "color", src: "#1e1b4b", motion: "zoom-in" },
+          background: { type: "color", src: "#991b1b", motion: "zoom-in" },
           mascot: { isVisible: true, pose: "shocked", position: "left", entranceAnimation: "pop-in" },
-          overlays: [{ id: "o-1", type: "lower-third", props: { title: "The Problem", subtitle: "Manual multitrack chaos", category: "INSIGHT" } }],
+          overlays: [{ id: "o-1", type: "lower-third", props: { title: "Old Trafford", subtitle: "Theatre of Dreams • 74,310 Capacity", category: "ARENA SPOTLIGHT" } }],
         },
         {
-          id: `s-${Date.now()}-2`,
+          id: `s-${timestamp}-2`,
           startFrame: 110,
-          durationInFrames: 120,
-          scriptText: "Enter ZeroTrack. The narrative text script directly anchors every frame and visual.",
+          durationInFrames: 125,
+          scriptText: "From the 1999 treble in Barcelona to twenty league titles, greatness demands unrelenting belief.",
           wordTokens: [],
           background: { type: "color", src: "#0f172a", motion: "pan-left" },
-          mascot: { isVisible: true, pose: "explaining", position: "left", entranceAnimation: "slide-up" },
-          overlays: [{ id: "o-2", type: "stat-counter", props: { label: "Speed Increase", targetValue: 300, prefix: "+", suffix: "%", accentColor: "#6366f1" } }],
+          mascot: { isVisible: true, pose: "pointing", position: "left", entranceAnimation: "slide-up" },
+          overlays: [{ id: "o-2", type: "stat-counter", props: { label: "League Titles", targetValue: 20, prefix: "", suffix: " Cups", accentColor: "#ef4444" } }],
         },
         {
-          id: `s-${Date.now()}-3`,
-          startFrame: 230,
-          durationInFrames: 120,
-          scriptText: "Kokoro TTS and Whisper generate instant thirty FPS videos in seconds.",
+          id: `s-${timestamp}-3`,
+          startFrame: 235,
+          durationInFrames: 115,
+          scriptText: "When the clock strikes ninety minutes, that is when true champions write football history.",
           wordTokens: [],
-          background: { type: "color", src: "#064e3b", motion: "zoom-in" },
-          mascot: { isVisible: true, pose: "pointing", position: "left", entranceAnimation: "pop-in" },
-          overlays: [{ id: "o-3", type: "progress-ring", props: { label: "Export Ready", percentage: 100, color: "#10b981" } }],
+          background: { type: "color", src: "#1e1b4b", motion: "zoom-in" },
+          mascot: { isVisible: true, pose: "explaining", position: "left", entranceAnimation: "pop-in" },
+          overlays: [{ id: "o-3", type: "progress-ring", props: { label: "Fergie Time", percentage: 99, color: "#f59e0b" } }],
         },
       ];
-    } else {
+    } else if (type === "finance") {
       newScenes = [
         {
-          id: `s-${Date.now()}-1`,
+          id: `s-${timestamp}-1`,
           startFrame: 0,
           durationInFrames: 110,
-          scriptText: "How does Semantic Anchoring work under the hood? Let us look at the IPC architecture.",
+          scriptText: "Wall Street trades billions every second, but high-frequency algorithms execute before humans blink.",
+          wordTokens: [],
+          background: { type: "color", src: "#090d16", motion: "zoom-in" },
+          mascot: { isVisible: true, pose: "explaining", position: "left", entranceAnimation: "slide-up" },
+          overlays: [{ id: "o-1", type: "lower-third", props: { title: "Algorithmic Speed", subtitle: "Sub-microsecond latency arbitrage", category: "MARKET DYNAMICS" } }],
+        },
+        {
+          id: `s-${timestamp}-2`,
+          startFrame: 110,
+          durationInFrames: 120,
+          scriptText: "Over eighty percent of equity volume is now routed through automated algorithmic liquidity pools.",
+          wordTokens: [],
+          background: { type: "color", src: "#064e3b", motion: "pan-left" },
+          mascot: { isVisible: true, pose: "pointing", position: "left", entranceAnimation: "pop-in" },
+          overlays: [{ id: "o-2", type: "stat-counter", props: { label: "Automated Volume", targetValue: 82, prefix: "", suffix: "%", accentColor: "#10b981" } }],
+        },
+      ];
+    } else if (type === "history") {
+      newScenes = [
+        {
+          id: `s-${timestamp}-1`,
+          startFrame: 0,
+          durationInFrames: 110,
+          scriptText: "In forty-four BC, the Roman Republic stood at a crossroads that reshaped world civilization.",
+          wordTokens: [],
+          background: { type: "color", src: "#311005", motion: "zoom-in" },
+          mascot: { isVisible: true, pose: "shocked", position: "left", entranceAnimation: "pop-in" },
+          overlays: [{ id: "o-1", type: "lower-third", props: { title: "The Roman Forum", subtitle: "The Ides of March • 44 BC", category: "CHRONICLES" } }],
+        },
+        {
+          id: `s-${timestamp}-2`,
+          startFrame: 110,
+          durationInFrames: 120,
+          scriptText: "From aqueducts to military road networks, Roman engineering spanned over fifty thousand miles.",
+          wordTokens: [],
+          background: { type: "color", src: "#1c1917", motion: "pan-left" },
+          mascot: { isVisible: true, pose: "explaining", position: "left", entranceAnimation: "slide-up" },
+          overlays: [{ id: "o-2", type: "stat-counter", props: { label: "Paved Highways", targetValue: 50, prefix: "", suffix: "k Miles", accentColor: "#d97706" } }],
+        },
+      ];
+    } else if (type === "tech") {
+      newScenes = [
+        {
+          id: `s-${timestamp}-1`,
+          startFrame: 0,
+          durationInFrames: 110,
+          scriptText: "How does Semantic Anchoring work under the hood? Let us look at the Node to Python IPC bridge.",
           wordTokens: [],
           background: { type: "color", src: "#0b0d13", motion: "zoom-in" },
           mascot: { isVisible: true, pose: "explaining", position: "left", entranceAnimation: "slide-up" },
           overlays: [{ id: "o-1", type: "code-snippet", props: { filename: "ipc-bridge.ts", code: `const python = spawn("python3", ["pipeline.py"]);\npython.stdin.write(stateJSON);` } }],
         },
         {
-          id: `s-${Date.now()}-2`,
+          id: `s-${timestamp}-2`,
           startFrame: 110,
           durationInFrames: 120,
-          scriptText: "Python generates the voice track and returns word-level Whisper timestamps.",
+          scriptText: "Python generates the voice track and returns word-level Whisper timestamps for frame-accurate lock.",
           wordTokens: [],
           background: { type: "color", src: "#172554", motion: "pan-left" },
           mascot: { isVisible: true, pose: "pointing", position: "left", entranceAnimation: "pop-in" },
-          overlays: [{ id: "o-2", type: "stat-counter", props: { label: "Word Accuracy", targetValue: 99, prefix: "", suffix: "%", accentColor: "#38bdf8" } }],
+          overlays: [{ id: "o-2", type: "stat-counter", props: { label: "Alignment Accuracy", targetValue: 99, prefix: "", suffix: "%", accentColor: "#38bdf8" } }],
+        },
+      ];
+    } else {
+      newScenes = [
+        {
+          id: `s-${timestamp}-1`,
+          startFrame: 0,
+          durationInFrames: 110,
+          scriptText: "Traditional video editing is broken. Timelines are too complex and manual dragging is slow.",
+          wordTokens: [],
+          background: { type: "color", src: "#1e1b4b", motion: "zoom-in" },
+          mascot: { isVisible: true, pose: "shocked", position: "left", entranceAnimation: "pop-in" },
+          overlays: [{ id: "o-1", type: "lower-third", props: { title: "The Problem", subtitle: "Manual multitrack chaos", category: "INSIGHT" } }],
+        },
+        {
+          id: `s-${timestamp}-2`,
+          startFrame: 110,
+          durationInFrames: 120,
+          scriptText: "Enter ZeroTrack. The narrative text script directly anchors every frame and visual layer.",
+          wordTokens: [],
+          background: { type: "color", src: "#0f172a", motion: "pan-left" },
+          mascot: { isVisible: true, pose: "explaining", position: "left", entranceAnimation: "slide-up" },
+          overlays: [{ id: "o-2", type: "stat-counter", props: { label: "Speed Increase", targetValue: 300, prefix: "+", suffix: "%", accentColor: "#6366f1" } }],
         },
       ];
     }
@@ -213,188 +342,186 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
           </span>
         </div>
 
-        {/* Quick Template Inspirations */}
+        {/* Quick Genre Templates */}
         <div className="flex items-center gap-1">
           <button
-            onClick={() => applyPresetTemplate("pitch")}
-            title="Load Product Pitch Script"
-            className="text-[11px] font-semibold text-slate-400 hover:text-white px-2 py-1 rounded bg-studio-900 hover:bg-studio-800 border border-studio-800 transition-colors"
+            onClick={() => applyPresetTemplate("sports")}
+            title="Load Sports & Arena Template"
+            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-red-400 text-xs flex items-center gap-1 transition-all"
           >
-            Pitch
+            <Trophy className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => applyPresetTemplate("finance")}
+            title="Load Finance & Market Template"
+            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-emerald-400 text-xs flex items-center gap-1 transition-all"
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => applyPresetTemplate("history")}
+            title="Load History & Empire Template"
+            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-amber-400 text-xs flex items-center gap-1 transition-all"
+          >
+            <Scroll className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => applyPresetTemplate("tech")}
-            title="Load Technical Explainer Script"
-            className="text-[11px] font-semibold text-slate-400 hover:text-white px-2 py-1 rounded bg-studio-900 hover:bg-studio-800 border border-studio-800 transition-colors"
+            title="Load Tech Architecture Template"
+            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-cyan-400 text-xs flex items-center gap-1 transition-all"
           >
-            Code
+            <Cpu className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => applyPresetTemplate("pitch")}
+            title="Load Product Pitch Template"
+            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-indigo-400 text-xs flex items-center gap-1 transition-all"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Narrative Script Philosophy Banner */}
-      <div className="px-4 py-2.5 bg-gradient-to-r from-studio-accent/15 via-studio-850 to-transparent border-b border-studio-800/80 text-[11px] text-slate-300 flex items-center gap-2">
-        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-        <span>
-          <strong>Semantic Anchoring:</strong> Edit script text below. Audio and frame durations lock automatically.
-        </span>
+      {/* Spoken Audio Sync Banner / Action */}
+      <div className="p-3 bg-studio-900/60 border-b border-studio-800 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="text-xs text-slate-300 font-medium">
+            Total Duration: {(state.metadata.totalDurationInFrames / 30).toFixed(1)}s (
+            {state.metadata.totalDurationInFrames}f)
+          </span>
+        </div>
+
+        <button
+          onClick={onTriggerSync}
+          disabled={isSyncing}
+          className="px-3 py-1.5 rounded-lg bg-studio-accent hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+        >
+          <Mic className="w-3.5 h-3.5" />
+          <span>{isSyncing ? "Syncing Audio..." : "Sync Audio"}</span>
+        </button>
       </div>
 
-      {/* Scene Feed (Scrollable) */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+      {/* Scene Feed (Scrollable List) */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
         {state.scenes.map((scene, idx) => {
           const isSelected = scene.id === selectedSceneId;
-          const durationSeconds = (scene.durationInFrames / state.metadata.fps).toFixed(1);
           const wordCount = scene.scriptText.trim().split(/\s+/).filter(Boolean).length;
-          const hasTokens = scene.wordTokens && scene.wordTokens.length > 0;
+          const durationSeconds = (scene.durationInFrames / 30).toFixed(1);
 
           return (
             <div
               key={scene.id}
               onClick={() => onSelectScene(scene.id)}
-              className={`rounded-xl border transition-all cursor-pointer p-3.5 relative group ${
+              className={`rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
                 isSelected
-                  ? "bg-studio-900/95 border-studio-accent shadow-lg shadow-studio-accent/10 ring-1 ring-studio-accent/40"
-                  : "bg-studio-900/40 border-studio-800 hover:bg-studio-900/80 hover:border-studio-700"
+                  ? "bg-studio-900/90 border-studio-accent shadow-lg shadow-studio-accent/10 ring-1 ring-studio-accent"
+                  : "bg-studio-900/40 border-studio-800/80 hover:border-studio-700 hover:bg-studio-900/60"
               }`}
             >
               {/* Scene Card Header */}
-              <div className="flex items-center justify-between mb-2">
+              <div className="p-3 border-b border-studio-800/60 flex items-center justify-between text-xs bg-studio-950/40">
                 <div className="flex items-center gap-2">
-                  <span
-                    className={`w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-bold ${
-                      isSelected
-                        ? "bg-studio-accent text-white"
-                        : "bg-studio-800 text-slate-400 group-hover:text-slate-200"
-                    }`}
-                  >
+                  <span className="w-5 h-5 rounded-full bg-studio-800 text-indigo-300 font-mono font-bold flex items-center justify-center text-[10px]">
                     {idx + 1}
                   </span>
-
-                  {/* Frame & Seconds Badge */}
-                  <div className="flex items-center gap-1 text-[11px] font-mono font-medium text-slate-300 bg-studio-950 px-2 py-0.5 rounded border border-studio-800">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    <span>{durationSeconds}s</span>
-                    <span className="text-slate-500">({scene.durationInFrames}f)</span>
-                  </div>
-
-                  {/* Word Count */}
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    {wordCount} words
+                  <span className="font-semibold text-slate-200">Scene {idx + 1}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {durationSeconds}s ({scene.durationInFrames}f)
                   </span>
                 </div>
 
-                {/* Card Controls */}
-                <div className="flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1">
+                  {/* Re-order buttons */}
                   <button
-                    onClick={(e) => handleMove(idx, -1, e)}
                     disabled={idx === 0}
-                    className="p-1 hover:bg-studio-800 rounded text-slate-400 hover:text-white disabled:opacity-30"
-                    title="Move Up"
+                    onClick={(e) => handleMove(idx, -1, e)}
+                    className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-20"
+                    title="Move Scene Up"
                   >
                     <ChevronUp className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    onClick={(e) => handleMove(idx, 1, e)}
                     disabled={idx === state.scenes.length - 1}
-                    className="p-1 hover:bg-studio-800 rounded text-slate-400 hover:text-white disabled:opacity-30"
-                    title="Move Down"
+                    onClick={(e) => handleMove(idx, 1, e)}
+                    className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-20"
+                    title="Move Scene Down"
                   >
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
+                  {/* Duplicate */}
                   <button
                     onClick={(e) => handleDuplicateScene(scene, e)}
-                    className="p-1 hover:bg-studio-800 rounded text-slate-400 hover:text-white"
+                    className="p-1 text-slate-500 hover:text-slate-300"
                     title="Duplicate Scene"
                   >
                     <Copy className="w-3.5 h-3.5" />
                   </button>
-                  {state.scenes.length > 1 && (
-                    <button
-                      onClick={(e) => handleDeleteScene(scene.id, e)}
-                      className="p-1 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400"
-                      title="Delete Scene"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                  {/* Delete */}
+                  <button
+                    disabled={state.scenes.length <= 1}
+                    onClick={(e) => handleDeleteScene(scene.id, e)}
+                    className="p-1 text-slate-500 hover:text-red-400 disabled:opacity-20"
+                    title="Delete Scene"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
-              {/* Spoken Text Script Area */}
-              <div className="relative">
+              {/* Script Text Input (Core Semantic Anchor) */}
+              <div className="p-3">
                 <textarea
                   value={scene.scriptText}
                   onChange={(e) => handleScriptChange(scene.id, e.target.value)}
-                  placeholder="Enter the voice narrative for this scene..."
-                  rows={2}
-                  className="w-full bg-studio-950/80 hover:bg-studio-950 focus:bg-studio-950 border border-studio-800 focus:border-studio-accent rounded-lg p-2.5 text-xs text-slate-100 placeholder-slate-500 resize-none outline-none leading-relaxed font-sans transition-all"
+                  placeholder="Type what should be spoken in this scene..."
+                  rows={3}
+                  className="w-full bg-studio-950/60 border border-studio-800 focus:border-studio-accent/70 rounded-xl p-2.5 text-xs text-slate-100 placeholder-slate-600 outline-none resize-none leading-relaxed transition-colors"
                 />
-              </div>
 
-              {/* Scene Metadata Tags */}
-              <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-studio-800/60">
-                <div className="flex items-center gap-2">
-                  {/* Mascot Pose Tag */}
-                  {scene.mascot.isVisible ? (
-                    <span className="flex items-center gap-1 bg-studio-950 px-2 py-0.5 rounded border border-studio-800 text-[10px] text-amber-400 font-medium">
-                      <Smile className="w-3 h-3 text-amber-400" />
-                      <span>{scene.mascot.pose}</span>
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-slate-500">Mascot hidden</span>
-                  )}
+                {/* Badges / Layer Tags */}
+                <div className="mt-2.5 flex items-center flex-wrap gap-2 text-[10px]">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-studio-800/80 text-slate-300 border border-studio-700/50">
+                    <Smile className="w-3 h-3 text-amber-400" />
+                    <span>{scene.mascot.pose}</span>
+                  </span>
 
-                  {/* Overlays Tag */}
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-studio-800/80 text-slate-300 border border-studio-700/50">
+                    <span
+                      className="w-2 h-2 rounded-full inline-block"
+                      style={{
+                        backgroundColor:
+                          scene.background.type === "color"
+                            ? scene.background.src
+                            : "#6366f1",
+                      }}
+                    />
+                    <span className="capitalize">{scene.background.type.replace("_", " ")}</span>
+                  </span>
+
                   {scene.overlays.length > 0 && (
-                    <span className="flex items-center gap-1 bg-studio-950 px-2 py-0.5 rounded border border-studio-800 text-[10px] text-indigo-300 font-medium">
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
                       <Layers className="w-3 h-3 text-indigo-400" />
-                      <span>{scene.overlays.length} overlay</span>
+                      <span>{scene.overlays.length} overlay{scene.overlays.length > 1 ? "s" : ""}</span>
                     </span>
                   )}
-                </div>
 
-                {/* Whisper Alignment Status Indicator */}
-                <div className="flex items-center gap-1">
-                  {hasTokens ? (
-                    <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      Whisper Synced
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-medium text-amber-400/80 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
-                      Needs Audio Sync
-                    </span>
-                  )}
+                  <span className="ml-auto text-[10px] text-slate-400 font-mono">
+                    {wordCount} words
+                  </span>
                 </div>
               </div>
             </div>
           );
         })}
 
-        {/* Add Scene Button */}
+        {/* Add Scene Card */}
         <button
           onClick={handleAddScene}
-          className="w-full py-3 rounded-xl border border-dashed border-studio-700 hover:border-studio-accent bg-studio-900/20 hover:bg-studio-900/60 text-slate-400 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all group"
+          className="w-full py-3 rounded-2xl border-2 border-dashed border-studio-800 hover:border-studio-accent/60 bg-studio-900/20 hover:bg-studio-900/50 text-slate-400 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
         >
-          <Plus className="w-4 h-4 text-studio-accent group-hover:scale-110 transition-transform" />
+          <Plus className="w-4 h-4" />
           <span>Add New Scene</span>
-        </button>
-      </div>
-
-      {/* Bottom Sync Banner */}
-      <div className="p-3 border-t border-studio-800 bg-studio-900/60 flex items-center justify-between">
-        <div className="text-[11px] text-slate-400">
-          Sync generates Kokoro .wav and Whisper frames
-        </div>
-        <button
-          onClick={onTriggerSync}
-          disabled={isSyncing}
-          className="px-3 py-1.5 rounded-lg bg-studio-accent hover:bg-studio-accentHover text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/20 disabled:opacity-50 flex items-center gap-1.5"
-        >
-          <Mic className="w-3.5 h-3.5" />
-          <span>Sync Timings</span>
         </button>
       </div>
     </aside>

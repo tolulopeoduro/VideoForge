@@ -37,11 +37,14 @@ const MASCOT_POSES: Array<{
 ];
 
 const COLOR_PRESETS = [
-  { label: "Obsidian", value: "#0f172a" },
-  { label: "Midnight Indigo", value: "#1e1b4b" },
+  { label: "Obsidian Slate", value: "#0f172a" },
+  { label: "Crimson Arena", value: "#991b1b" },
   { label: "Emerald Abyss", value: "#064e3b" },
-  { label: "Deep Amber", value: "#311005" },
-  { label: "Cyber Black", value: "#090d16" },
+  { label: "Deep Amber / Rome", value: "#311005" },
+  { label: "Midnight Indigo", value: "#1e1b4b" },
+  { label: "Cosmic Charcoal", value: "#090d16" },
+  { label: "Royal Gold", value: "#78350f" },
+  { label: "Steel Blue", value: "#172554" },
 ];
 
 export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
@@ -228,7 +231,22 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                   <Wand2 className="w-3.5 h-3.5 text-studio-accent" />
                   FLUX Klein Prompt
                 </span>
-                <span className="text-[10px] text-indigo-400 font-mono">fal.ai</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = scene.scriptText.trim();
+                    const snippet = text.slice(0, 100).replace(/[^\w\s]/g, "");
+                    const generatedPrompt = `Cinematic 8k background environment for: ${snippet}, volumetric atmospheric lighting, professional film still, photorealistic studio depth of field`;
+                    updateScene((s) => ({
+                      ...s,
+                      background: { ...s.background, prompt: generatedPrompt },
+                    }));
+                  }}
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 font-medium underline flex items-center gap-1"
+                >
+                  <Sparkles className="w-2.5 h-2.5" />
+                  Suggest from Script
+                </button>
               </div>
 
               <textarea
