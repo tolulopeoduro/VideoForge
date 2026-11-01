@@ -17,6 +17,16 @@ import {
   TrendingUp,
   CreditCard,
   PieChart,
+  Eye,
+  EyeOff,
+  Compass,
+  ArrowUpRight,
+  Trophy,
+  Landmark,
+  Coins,
+  Orbit,
+  Cpu,
+  Film,
 } from "lucide-react";
 
 interface RightInspectorPanelProps {
@@ -29,11 +39,12 @@ const MASCOT_POSES: Array<{
   id: Scene["mascot"]["pose"];
   label: string;
   preview: string;
+  desc: string;
 }> = [
-  { id: "neutral", label: "Neutral", preview: "/mascot/neutral.svg" },
-  { id: "explaining", label: "Explaining", preview: "/mascot/explaining.svg" },
-  { id: "shocked", label: "Shocked", preview: "/mascot/shocked.svg" },
-  { id: "pointing", label: "Pointing", preview: "/mascot/pointing.svg" },
+  { id: "neutral", label: "Neutral", preview: "/mascot/neutral.svg", desc: "Attentive baseline stance" },
+  { id: "explaining", label: "Explaining", preview: "/mascot/explaining.svg", desc: "Open palms presentation" },
+  { id: "shocked", label: "Shocked", preview: "/mascot/shocked.svg", desc: "Gasp & high energy impact" },
+  { id: "pointing", label: "Pointing", preview: "/mascot/pointing.svg", desc: "Directing viewer focus" },
 ];
 
 const COLOR_PRESETS = [
@@ -45,6 +56,39 @@ const COLOR_PRESETS = [
   { label: "Cosmic Charcoal", value: "#090d16" },
   { label: "Royal Gold", value: "#78350f" },
   { label: "Steel Blue", value: "#172554" },
+];
+
+const GENRE_PROMPT_PRESETS = [
+  {
+    label: "Sports Arena",
+    icon: Trophy,
+    prompt: "Old Trafford stadium under electric arena floodlights at night, pitch turf perspective, atmospheric mist, cinematic 8k wallpaper",
+  },
+  {
+    label: "Wall Street",
+    icon: Coins,
+    prompt: "Wall Street financial trading floor with glowing emerald candlestick charts and holographic market tickers, dark graphite architecture, 8k",
+  },
+  {
+    label: "Ancient Rome",
+    icon: Landmark,
+    prompt: "Monumental Roman Colosseum with marble columns and antique warm sepia chiaroscuro illumination, historical documentary lighting",
+  },
+  {
+    label: "Deep Space",
+    icon: Orbit,
+    prompt: "Deep cosmic starfield with violet interstellar nebula dust clouds and tilted planetary orbital rings, photorealistic astrophysics",
+  },
+  {
+    label: "Cyber Matrix",
+    icon: Cpu,
+    prompt: "Minimalist dark slate developer studio with ambient purple rim lighting and isometric data vectors, modern tech aesthetic",
+  },
+  {
+    label: "Noir Cinema",
+    icon: Film,
+    prompt: "Moody dramatic cinema stage with volumetric light cones and mysterious architectural shadows, 35mm film still",
+  },
 ];
 
 export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
@@ -60,10 +104,10 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
 
   if (!scene) {
     return (
-      <aside className="w-[25%] min-w-[280px] max-w-[380px] h-[calc(100vh-4rem)] bg-studio-950 border-l border-studio-800 p-6 flex flex-col items-center justify-center text-center text-slate-500">
-        <Sliders className="w-8 h-8 mb-2 opacity-40 text-slate-400" />
-        <p className="text-sm font-semibold">No scene selected</p>
-        <p className="text-xs text-slate-500 mt-1">Select a scene from the feed to inspect</p>
+      <aside className="w-[25%] min-w-[290px] max-w-[390px] h-[calc(100vh-4rem)] bg-studio-975 border-l border-white/[0.07] p-6 flex flex-col items-center justify-center text-center text-slate-500">
+        <Sliders className="w-8 h-8 mb-2 opacity-30 text-indigo-400" />
+        <p className="text-sm font-bold text-slate-300">No scene selected</p>
+        <p className="text-xs text-slate-500 mt-1">Select a scene from the feed to inspect and modify</p>
       </aside>
     );
   }
@@ -75,7 +119,6 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
     }));
   };
 
-  // FLUX Klein Background Generation
   const handleGenerateFluxBackground = async () => {
     setIsGeneratingBg(true);
     try {
@@ -108,7 +151,6 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
     }
   };
 
-  // Overlay management
   const handleAddOverlay = (type: GraphicOverlay["type"]) => {
     const id = `overlay-${Date.now()}`;
     let props: Record<string, any> = {};
@@ -144,57 +186,59 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
   };
 
   return (
-    <aside className="w-[25%] min-w-[290px] max-w-[390px] h-[calc(100vh-4rem)] bg-studio-950 border-l border-studio-800 flex flex-col select-none">
-      {/* Panel Top Title */}
-      <div className="p-4 border-b border-studio-800 bg-studio-900/40 flex items-center justify-between">
+    <aside className="w-[25%] min-w-[290px] max-w-[390px] h-[calc(100vh-4rem)] bg-studio-975 border-l border-white/[0.07] flex flex-col select-none">
+      {/* Top Scene Identifier Header */}
+      <div className="p-4 border-b border-white/[0.07] bg-studio-950/70 backdrop-blur-xl flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sliders className="w-4 h-4 text-studio-accent" />
-          <h2 className="text-sm font-bold text-white tracking-wide uppercase">
+          <h2 className="text-xs font-bold text-white tracking-wider uppercase">
             Scene {sceneIdx + 1} Inspector
           </h2>
         </div>
-        <span className="text-xs text-indigo-400 font-mono bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded">
-          {scene.durationInFrames}f
+        <span className="text-[11px] text-indigo-300 font-mono bg-studio-900 border border-white/[0.08] px-2 py-0.5 rounded-full font-bold tabular-nums">
+          {scene.durationInFrames}f ({(scene.durationInFrames / 30).toFixed(1)}s)
         </span>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-studio-800 bg-studio-900/20 text-xs">
-        <button
-          onClick={() => setActiveTab("background")}
-          className={`flex-1 py-2.5 font-bold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
-            activeTab === "background"
-              ? "text-studio-accent border-studio-accent bg-studio-900/50"
-              : "text-slate-400 border-transparent hover:text-slate-200"
-          }`}
-        >
-          <ImageIcon className="w-3.5 h-3.5" />
-          <span>Background</span>
-        </button>
+      {/* Segmented Tab Navigation with Sleek Pill Design */}
+      <div className="p-2 border-b border-white/[0.07] bg-studio-950/40">
+        <div className="grid grid-cols-3 gap-1 bg-studio-900 p-1 rounded-xl border border-white/[0.06] text-xs">
+          <button
+            onClick={() => setActiveTab("background")}
+            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all ${
+              activeTab === "background"
+                ? "bg-studio-accent text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span>Visual</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("mascot")}
-          className={`flex-1 py-2.5 font-bold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
-            activeTab === "mascot"
-              ? "text-amber-400 border-amber-400 bg-studio-900/50"
-              : "text-slate-400 border-transparent hover:text-slate-200"
-          }`}
-        >
-          <Smile className="w-3.5 h-3.5" />
-          <span>Mascot</span>
-        </button>
+          <button
+            onClick={() => setActiveTab("mascot")}
+            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all ${
+              activeTab === "mascot"
+                ? "bg-amber-500 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Smile className="w-3.5 h-3.5" />
+            <span>Mascot</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("overlays")}
-          className={`flex-1 py-2.5 font-bold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
-            activeTab === "overlays"
-              ? "text-indigo-400 border-indigo-400 bg-studio-900/50"
-              : "text-slate-400 border-transparent hover:text-slate-200"
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>Overlays ({scene.overlays.length})</span>
-        </button>
+          <button
+            onClick={() => setActiveTab("overlays")}
+            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all ${
+              activeTab === "overlays"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Layers ({scene.overlays.length})</span>
+          </button>
+        </div>
       </div>
 
       {/* Tab Contents */}
@@ -202,19 +246,19 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
         {/* ================= BACKGROUND TAB ================= */}
         {activeTab === "background" && (
           <div className="space-y-4">
-            {/* Background Type */}
+            {/* Layer Type */}
             <div>
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                Layer Type
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
+                Background Type
               </label>
-              <div className="grid grid-cols-3 gap-1.5 bg-studio-900 p-1 rounded-xl border border-studio-800 text-xs">
+              <div className="grid grid-cols-3 gap-1.5 bg-studio-900 p-1 rounded-xl border border-white/[0.06] text-xs">
                 {(["color", "flux_klein", "stock"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => updateScene((s) => ({ ...s, background: { ...s.background, type: t } }))}
                     className={`py-1.5 rounded-lg font-bold capitalize transition-all ${
                       scene.background.type === t
-                        ? "bg-studio-accent text-white shadow"
+                        ? "bg-studio-accent text-white shadow-sm"
                         : "text-slate-400 hover:text-slate-200"
                     }`}
                   >
@@ -224,25 +268,25 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
               </div>
             </div>
 
-            {/* FLUX Prompt Generator */}
-            <div className="bg-studio-900/40 border border-studio-800 rounded-xl p-3.5 space-y-3">
+            {/* FLUX Prompt Generator & Genre Quick Presets */}
+            <div className="bg-studio-900/60 border border-white/[0.08] rounded-2xl p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                   <Wand2 className="w-3.5 h-3.5 text-studio-accent" />
-                  FLUX Klein Prompt
+                  FLUX Klein Environment
                 </span>
                 <button
                   type="button"
                   onClick={() => {
                     const text = scene.scriptText.trim();
                     const snippet = text.slice(0, 100).replace(/[^\w\s]/g, "");
-                    const generatedPrompt = `Cinematic 8k background environment for: ${snippet}, volumetric atmospheric lighting, professional film still, photorealistic studio depth of field`;
+                    const generatedPrompt = `Cinematic 8k background environment for: ${snippet}, volumetric lighting, photorealistic studio depth of field`;
                     updateScene((s) => ({
                       ...s,
                       background: { ...s.background, prompt: generatedPrompt },
                     }));
                   }}
-                  className="text-[10px] text-indigo-400 hover:text-indigo-300 font-medium underline flex items-center gap-1"
+                  className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold underline flex items-center gap-1"
                 >
                   <Sparkles className="w-2.5 h-2.5" />
                   Suggest from Script
@@ -257,37 +301,63 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                     background: { ...s.background, prompt: e.target.value },
                   }))
                 }
-                placeholder="e.g. Cyberpunk minimalist glass studio with ambient purple rim lighting..."
+                placeholder="e.g. Cinematic arena floodlights, volumetric atmospheric haze..."
                 rows={2}
-                className="w-full bg-studio-950 border border-studio-800 focus:border-studio-accent rounded-lg p-2.5 text-xs text-slate-200 outline-none resize-none leading-relaxed"
+                className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-xl p-2.5 text-xs text-slate-200 outline-none resize-none leading-relaxed"
               />
+
+              {/* Genre Quick-Tags */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-slate-500 font-semibold block">Quick Genre Atmospheric Themes:</span>
+                <div className="flex items-center flex-wrap gap-1">
+                  {GENRE_PROMPT_PRESETS.map((p, idx) => {
+                    const Icon = p.icon;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() =>
+                          updateScene((s) => ({
+                            ...s,
+                            background: { ...s.background, prompt: p.prompt },
+                          }))
+                        }
+                        className="text-[10px] bg-studio-950 hover:bg-studio-800 border border-white/[0.06] text-slate-300 hover:text-white px-2 py-1 rounded-lg flex items-center gap-1 transition-all"
+                      >
+                        <Icon className="w-2.5 h-2.5 text-studio-accent" />
+                        <span>{p.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <button
                 onClick={handleGenerateFluxBackground}
                 disabled={isGeneratingBg}
-                className="w-full py-2 rounded-lg bg-gradient-to-r from-studio-accent to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-studio-accent via-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
               >
                 {isGeneratingBg ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Generating Environment...</span>
+                    <span>Synthesizing Environment...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     <span>Generate Background</span>
                   </>
                 )}
               </button>
             </div>
 
-            {/* Color Presets */}
+            {/* Color Palette Presets */}
             {scene.background.type === "color" && (
-              <div>
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                  Color Presets
+              <div className="bg-studio-900/40 border border-white/[0.08] rounded-2xl p-3.5 space-y-2.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                  Studio Tone Swatches
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   {COLOR_PRESETS.map((p) => (
                     <button
                       key={p.value}
@@ -299,10 +369,10 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                       }
                       title={p.label}
                       style={{ backgroundColor: p.value }}
-                      className={`w-8 h-8 rounded-lg border-2 transition-transform hover:scale-110 flex items-center justify-center ${
+                      className={`h-9 rounded-xl border-2 transition-transform hover:scale-105 flex items-center justify-center ${
                         scene.background.src === p.value
-                          ? "border-white ring-2 ring-studio-accent"
-                          : "border-studio-700"
+                          ? "border-white ring-2 ring-studio-accent shadow-glow"
+                          : "border-white/10"
                       }`}
                     >
                       {scene.background.src === p.value && <Check className="w-4 h-4 text-white" />}
@@ -313,9 +383,9 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
             )}
 
             {/* Ken Burns Dynamic Motion */}
-            <div>
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                Ken Burns Motion
+            <div className="bg-studio-900/40 border border-white/[0.08] rounded-2xl p-3.5 space-y-2.5">
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                Ken Burns Camera Motion
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {(["zoom-in", "pan-left", "static"] as const).map((m) => (
@@ -330,7 +400,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                     className={`py-2 px-2 rounded-xl border text-xs font-semibold capitalize flex flex-col items-center gap-1 transition-all ${
                       scene.background.motion === m
                         ? "bg-studio-accent/20 border-studio-accent text-white"
-                        : "bg-studio-900 border-studio-800 text-slate-400 hover:text-slate-200"
+                        : "bg-studio-900 border-white/[0.06] text-slate-400 hover:text-slate-200"
                     }`}
                   >
                     <span>{m.replace("-", " ")}</span>
@@ -343,27 +413,43 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
 
         {/* ================= MASCOT TAB ================= */}
         {activeTab === "mascot" && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {/* Visibility Toggle */}
-            <div className="flex items-center justify-between p-3 bg-studio-900 rounded-xl border border-studio-800">
-              <span className="text-xs font-bold text-slate-200">Show Brand Mascot</span>
-              <input
-                type="checkbox"
-                checked={scene.mascot.isVisible}
-                onChange={(e) =>
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-studio-900/60 border border-white/[0.08]">
+              <div className="flex items-center gap-2">
+                {scene.mascot.isVisible ? (
+                  <Eye className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <EyeOff className="w-4 h-4 text-slate-500" />
+                )}
+                <div>
+                  <div className="text-xs font-bold text-white">Brand Mascot</div>
+                  <div className="text-[10px] text-slate-400">Comic lightbulb narrator character</div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
                   updateScene((s) => ({
                     ...s,
-                    mascot: { ...s.mascot, isVisible: e.target.checked },
+                    mascot: { ...s.mascot, isVisible: !s.mascot.isVisible },
                   }))
                 }
-                className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
-              />
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                  scene.mascot.isVisible
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                    : "bg-studio-800 text-slate-500 border border-white/[0.05]"
+                }`}
+              >
+                {scene.mascot.isVisible ? "Visible" : "Hidden"}
+              </button>
             </div>
 
-            {/* Mascot Pose Selector Cards */}
+            {/* Mascot Character Pose Visual Grid */}
             <div>
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                Comic Mascot Pose
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
+                Select Mascot Pose
               </label>
               <div className="grid grid-cols-2 gap-2.5">
                 {MASCOT_POSES.map((pose) => {
@@ -377,36 +463,31 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                           mascot: { ...s.mascot, pose: pose.id },
                         }))
                       }
-                      className={`p-2.5 rounded-xl border cursor-pointer transition-all flex flex-col items-center gap-2 group ${
+                      className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col items-center text-center group ${
                         isSelected
-                          ? "bg-amber-500/10 border-amber-500/80 shadow-md ring-1 ring-amber-500/50"
-                          : "bg-studio-900 border-studio-800 hover:border-studio-700"
+                          ? "bg-amber-500/15 border-amber-500/60 ring-2 ring-amber-500/40 shadow-glow"
+                          : "bg-studio-900/50 border-white/[0.07] hover:border-white/15 hover:bg-studio-900"
                       }`}
                     >
-                      <div className="w-16 h-20 rounded-lg overflow-hidden bg-studio-950 p-1 flex items-center justify-center">
+                      <div className="w-14 h-14 mb-2 p-1">
                         <img
                           src={pose.preview}
                           alt={pose.label}
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                          className="w-full h-full object-contain filter drop-shadow group-hover:scale-105 transition-transform"
                         />
                       </div>
-                      <span
-                        className={`text-xs font-bold ${
-                          isSelected ? "text-amber-400" : "text-slate-400"
-                        }`}
-                      >
-                        {pose.label}
-                      </span>
+                      <span className="text-xs font-bold text-white">{pose.label}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5 leading-tight">{pose.desc}</span>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* Horizontal Placement */}
+            {/* Mascot Positioning */}
             <div>
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                Mascot Position
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
+                Horizontal Placement
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {(["left", "center", "right"] as const).map((pos) => (
@@ -421,7 +502,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                     className={`py-2 rounded-xl border text-xs font-semibold capitalize transition-all ${
                       scene.mascot.position === pos
                         ? "bg-amber-500/20 border-amber-500 text-white"
-                        : "bg-studio-900 border-studio-800 text-slate-400 hover:text-slate-200"
+                        : "bg-studio-900 border-white/[0.06] text-slate-400 hover:text-slate-200"
                     }`}
                   >
                     {pos}
@@ -432,8 +513,8 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
 
             {/* Entrance Physics Animation */}
             <div>
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                Spring Entrance Physics
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
+                Entrance Physics Animation
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {(["slide-up", "pop-in", "fade"] as const).map((anim) => (
@@ -448,7 +529,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                     className={`py-2 rounded-xl border text-xs font-semibold capitalize transition-all ${
                       scene.mascot.entranceAnimation === anim
                         ? "bg-amber-500/20 border-amber-500 text-white"
-                        : "bg-studio-900 border-studio-800 text-slate-400 hover:text-slate-200"
+                        : "bg-studio-900 border-white/[0.06] text-slate-400 hover:text-slate-200"
                     }`}
                   >
                     {anim.replace("-", " ")}
@@ -462,36 +543,36 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
         {/* ================= OVERLAYS TAB ================= */}
         {activeTab === "overlays" && (
           <div className="space-y-4">
-            {/* Add Overlay Button */}
+            {/* Add Overlay Buttons */}
             <div>
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
                 Add Graphic Overlay
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleAddOverlay("stat-counter")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-studio-800 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
                   <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
                   <span>Stat Counter</span>
                 </button>
                 <button
                   onClick={() => handleAddOverlay("lower-third")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-studio-800 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
                   <CreditCard className="w-3.5 h-3.5 text-pink-400" />
                   <span>Lower Third</span>
                 </button>
                 <button
                   onClick={() => handleAddOverlay("progress-ring")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-studio-800 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
                   <PieChart className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Progress Ring</span>
                 </button>
                 <button
                   onClick={() => handleAddOverlay("code-snippet")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-studio-800 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
                   <Code className="w-3.5 h-3.5 text-amber-400" />
                   <span>Code Snippet</span>
@@ -500,39 +581,39 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
             </div>
 
             {/* Active Overlays List */}
-            <div className="space-y-3 pt-2">
-              <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                Active Overlays ({scene.overlays.length})
+            <div className="space-y-3 pt-1">
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                Active Scene Overlays ({scene.overlays.length})
               </label>
 
               {scene.overlays.length === 0 ? (
-                <div className="p-4 rounded-xl border border-dashed border-studio-800 text-center text-xs text-slate-500">
-                  No overlays in this scene yet. Click a preset above to attach one.
+                <div className="p-5 rounded-2xl border border-dashed border-white/[0.08] text-center text-xs text-slate-500 bg-studio-900/20">
+                  No overlays in this scene. Click an overlay type above to attach one.
                 </div>
               ) : (
                 scene.overlays.map((overlay) => (
                   <div
                     key={overlay.id}
-                    className="p-3.5 rounded-xl bg-studio-900/60 border border-studio-800 space-y-3"
+                    className="p-3.5 rounded-2xl bg-studio-900/80 border border-white/[0.08] space-y-3 shadow-sm"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                      <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
                         {overlay.type.replace("-", " ")}
                       </span>
                       <button
                         onClick={() => handleDeleteOverlay(overlay.id)}
-                        className="text-slate-500 hover:text-red-400 p-1"
+                        className="text-slate-500 hover:text-rose-400 p-1 rounded-lg transition-colors"
                         title="Remove overlay"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
-                    {/* Dynamic parameter forms according to overlay type */}
+                    {/* Dynamic parameter forms */}
                     {overlay.type === "stat-counter" && (
                       <div className="space-y-2 text-xs">
                         <div>
-                          <label className="text-[11px] text-slate-400">Label</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Metric Label</label>
                           <input
                             type="text"
                             value={overlay.props.label || ""}
@@ -542,12 +623,12 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                 label: e.target.value,
                               })
                             }
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
                           />
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           <div>
-                            <label className="text-[11px] text-slate-400">Prefix</label>
+                            <label className="text-[10px] text-slate-400 font-semibold">Prefix</label>
                             <input
                               type="text"
                               value={overlay.props.prefix || ""}
@@ -557,25 +638,26 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                   prefix: e.target.value,
                                 })
                               }
-                              className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                              className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
                             />
                           </div>
                           <div>
-                            <label className="text-[11px] text-slate-400">Target</label>
+                            <label className="text-[10px] text-slate-400 font-semibold">Target</label>
                             <input
                               type="number"
                               value={overlay.props.targetValue ?? 100}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
                                 handleUpdateOverlayProps(overlay.id, {
                                   ...overlay.props,
-                                  targetValue: Number(e.target.value),
-                                })
-                              }
-                              className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                                  targetValue: Number.isNaN(val) ? 0 : val,
+                                });
+                              }}
+                              className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs tabular-nums"
                             />
                           </div>
                           <div>
-                            <label className="text-[11px] text-slate-400">Suffix</label>
+                            <label className="text-[10px] text-slate-400 font-semibold">Suffix</label>
                             <input
                               type="text"
                               value={overlay.props.suffix || ""}
@@ -585,7 +667,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                   suffix: e.target.value,
                                 })
                               }
-                              className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                              className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
                             />
                           </div>
                         </div>
@@ -595,7 +677,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                     {overlay.type === "lower-third" && (
                       <div className="space-y-2 text-xs">
                         <div>
-                          <label className="text-[11px] text-slate-400">Category Tag</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Category Tag</label>
                           <input
                             type="text"
                             value={overlay.props.category || ""}
@@ -605,11 +687,11 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                 category: e.target.value,
                               })
                             }
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-400">Title</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Main Title</label>
                           <input
                             type="text"
                             value={overlay.props.title || ""}
@@ -619,11 +701,11 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                 title: e.target.value,
                               })
                             }
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-400">Subtitle</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Subtitle Description</label>
                           <input
                             type="text"
                             value={overlay.props.subtitle || ""}
@@ -633,7 +715,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                 subtitle: e.target.value,
                               })
                             }
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
                           />
                         </div>
                       </div>
@@ -642,7 +724,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                     {overlay.type === "progress-ring" && (
                       <div className="space-y-2 text-xs">
                         <div>
-                          <label className="text-[11px] text-slate-400">Label</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Label</label>
                           <input
                             type="text"
                             value={overlay.props.label || ""}
@@ -652,23 +734,24 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                 label: e.target.value,
                               })
                             }
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-400">Percentage (0 - 100)</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Percentage (0-100)</label>
                           <input
                             type="number"
                             min={0}
                             max={100}
-                            value={overlay.props.percentage ?? 95}
-                            onChange={(e) =>
+                            value={overlay.props.percentage ?? 80}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
                               handleUpdateOverlayProps(overlay.id, {
                                 ...overlay.props,
-                                percentage: Number(e.target.value),
-                              })
-                            }
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none"
+                                percentage: Number.isNaN(val) ? 0 : val,
+                              });
+                            }}
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs tabular-nums"
                           />
                         </div>
                       </div>
@@ -677,7 +760,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                     {overlay.type === "code-snippet" && (
                       <div className="space-y-2 text-xs">
                         <div>
-                          <label className="text-[11px] text-slate-400">Filename</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Filename</label>
                           <input
                             type="text"
                             value={overlay.props.filename || ""}
@@ -687,12 +770,13 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                 filename: e.target.value,
                               })
                             }
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none font-mono"
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs font-mono"
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-400">Code</label>
+                          <label className="text-[10px] text-slate-400 font-semibold">Code Body</label>
                           <textarea
+                            rows={3}
                             value={overlay.props.code || ""}
                             onChange={(e) =>
                               handleUpdateOverlayProps(overlay.id, {
@@ -700,8 +784,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                                 code: e.target.value,
                               })
                             }
-                            rows={3}
-                            className="w-full bg-studio-950 border border-studio-800 rounded p-1.5 text-slate-200 outline-none font-mono text-[11px] leading-relaxed"
+                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs font-mono resize-none leading-relaxed"
                           />
                         </div>
                       </div>

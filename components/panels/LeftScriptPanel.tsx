@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { MasterVideoState, Scene } from "@/types/schema";
 import {
   Plus,
@@ -17,6 +17,10 @@ import {
   TrendingUp,
   Scroll,
   Cpu,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  Split,
 } from "lucide-react";
 
 interface LeftScriptPanelProps {
@@ -28,6 +32,13 @@ interface LeftScriptPanelProps {
   isSyncing: boolean;
 }
 
+const POSE_AVATARS: Record<Scene["mascot"]["pose"], string> = {
+  neutral: "/mascot/neutral.svg",
+  explaining: "/mascot/explaining.svg",
+  shocked: "/mascot/shocked.svg",
+  pointing: "/mascot/pointing.svg",
+};
+
 export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
   state,
   selectedSceneId,
@@ -36,6 +47,9 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
   onTriggerSync,
   isSyncing,
 }) => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const isAudioLocked = Boolean(state.audio.voiceTrackUrl);
+
   const handleScriptChange = (sceneId: string, newText: string) => {
     onUpdateState((prev) => {
       const isVoiceLocked = Boolean(prev.audio.voiceTrackUrl);
@@ -73,13 +87,14 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
     });
   };
 
-  const handleAddScene = () => {
+  const handleAddScene = (presetText?: string) => {
     const newId = `scene-${Date.now()}`;
     const newScene: Scene = {
       id: newId,
       startFrame: state.metadata.totalDurationInFrames,
-      durationInFrames: 90, // Estimated 3s until audio sync locks it
-      scriptText: "Write your next scene script here. Python will align the audio timing.",
+      durationInFrames: 90,
+      scriptText:
+        presetText || "Write your next scene script here. Python will align the audio timing.",
       wordTokens: [],
       background: {
         type: "color",
@@ -171,7 +186,6 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
       copy[idx] = copy[targetIdx];
       copy[targetIdx] = temp;
 
-      // Re-index frame starts sequentially
       let curr = 0;
       const reindexed = copy.map((s) => {
         const sCopy = { ...s, startFrame: curr };
@@ -187,7 +201,6 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
     });
   };
 
-  // Preset Script Templates for quick one-click inspiration across diverse genres
   const applyPresetTemplate = (type: "sports" | "finance" | "history" | "tech" | "pitch") => {
     let newScenes: Scene[] = [];
     const timestamp = Date.now();
@@ -328,115 +341,162 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
     onSelectScene(newScenes[0].id);
   };
 
+  const filteredScenes = searchQuery.trim()
+    ? state.scenes.filter((s) =>
+        s.scriptText.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : state.scenes;
+
   return (
-    <aside className="w-[30%] min-w-[320px] max-w-[420px] h-[calc(100vh-4rem)] bg-studio-950 border-r border-studio-800 flex flex-col select-none">
+    <aside className="w-[30%] min-w-[320px] max-w-[420px] h-[calc(100vh-4rem)] bg-studio-975 border-r border-white/[0.07] flex flex-col select-none">
       {/* Panel Header */}
-      <div className="p-4 border-b border-studio-800 flex items-center justify-between bg-studio-900/40">
+      <div className="p-4 border-b border-white/[0.07] flex items-center justify-between bg-studio-950/70 backdrop-blur-xl">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-studio-accent" />
-          <h2 className="text-sm font-bold text-white tracking-wide uppercase">
-            Script & Scene Feed
+          <h2 className="text-xs font-bold text-white tracking-wider uppercase">
+            Script & Narrative Feed
           </h2>
-          <span className="text-xs bg-studio-800 text-slate-300 font-bold px-2 py-0.5 rounded-full">
+          <span className="text-[11px] bg-studio-900 text-indigo-300 font-mono font-bold px-2 py-0.5 rounded-full border border-white/[0.08]">
             {state.scenes.length}
           </span>
         </div>
 
-        {/* Quick Genre Templates */}
+        {/* Quick Genre Inspiration Chips */}
         <div className="flex items-center gap-1">
           <button
             onClick={() => applyPresetTemplate("sports")}
             title="Load Sports & Arena Template"
-            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-red-400 text-xs flex items-center gap-1 transition-all"
+            className="p-1.5 rounded-lg bg-studio-900 hover:bg-studio-850 text-red-400 text-xs border border-white/[0.06] transition-all hover:scale-105"
           >
             <Trophy className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => applyPresetTemplate("finance")}
             title="Load Finance & Market Template"
-            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-emerald-400 text-xs flex items-center gap-1 transition-all"
+            className="p-1.5 rounded-lg bg-studio-900 hover:bg-studio-850 text-emerald-400 text-xs border border-white/[0.06] transition-all hover:scale-105"
           >
             <TrendingUp className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => applyPresetTemplate("history")}
             title="Load History & Empire Template"
-            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-amber-400 text-xs flex items-center gap-1 transition-all"
+            className="p-1.5 rounded-lg bg-studio-900 hover:bg-studio-850 text-amber-400 text-xs border border-white/[0.06] transition-all hover:scale-105"
           >
             <Scroll className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => applyPresetTemplate("tech")}
             title="Load Tech Architecture Template"
-            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-cyan-400 text-xs flex items-center gap-1 transition-all"
+            className="p-1.5 rounded-lg bg-studio-900 hover:bg-studio-850 text-cyan-400 text-xs border border-white/[0.06] transition-all hover:scale-105"
           >
             <Cpu className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => applyPresetTemplate("pitch")}
             title="Load Product Pitch Template"
-            className="p-1.5 rounded-lg bg-studio-800 hover:bg-studio-700 text-indigo-400 text-xs flex items-center gap-1 transition-all"
+            className="p-1.5 rounded-lg bg-studio-900 hover:bg-studio-850 text-indigo-400 text-xs border border-white/[0.06] transition-all hover:scale-105"
           >
             <Sparkles className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Spoken Audio Sync Banner / Action */}
-      <div className="p-3 bg-studio-900/60 border-b border-studio-800 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="text-xs text-slate-300 font-medium">
-            Total Duration: {(state.metadata.totalDurationInFrames / 30).toFixed(1)}s (
-            {state.metadata.totalDurationInFrames}f)
-          </span>
+      {/* Script Search & Audio Sync Banner */}
+      <div className="p-3 bg-studio-950/40 border-b border-white/[0.07] space-y-2">
+        {/* Search input */}
+        <div className="relative flex items-center">
+          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search dialogue text..."
+            className="w-full bg-studio-900/90 border border-white/[0.08] focus:border-studio-accent rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none transition-colors"
+          />
         </div>
 
-        <button
-          onClick={onTriggerSync}
-          disabled={isSyncing}
-          className="px-3 py-1.5 rounded-lg bg-studio-accent hover:bg-indigo-600 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
-        >
-          <Mic className="w-3.5 h-3.5" />
-          <span>{isSyncing ? "Syncing Audio..." : "Sync Audio"}</span>
-        </button>
+        {/* Sync Status strip */}
+        <div className="flex items-center justify-between text-[11px] px-1">
+          <div className="flex items-center gap-1.5 text-slate-400">
+            <Clock className="w-3 h-3 text-indigo-400" />
+            <span>
+              Total runtime:{" "}
+              <strong className="text-white font-mono tabular-nums">
+                {(state.metadata.totalDurationInFrames / 30).toFixed(1)}s
+              </strong>
+            </span>
+          </div>
+
+          <button
+            onClick={onTriggerSync}
+            disabled={isSyncing}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all ${
+              isAudioLocked
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                : "bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25"
+            }`}
+          >
+            <Mic className="w-3 h-3" />
+            <span>{isSyncing ? "Syncing..." : isAudioLocked ? "Audio Locked" : "Sync Needed"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Scene Feed (Scrollable List) */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
-        {state.scenes.map((scene, idx) => {
+      <div className="flex-1 overflow-y-auto p-3.5 space-y-3 custom-scrollbar">
+        {filteredScenes.map((scene, idx) => {
           const isSelected = scene.id === selectedSceneId;
           const wordCount = scene.scriptText.trim().split(/\s+/).filter(Boolean).length;
           const durationSeconds = (scene.durationInFrames / 30).toFixed(1);
+          const wordsPerSec =
+            scene.durationInFrames > 0
+              ? (wordCount / (scene.durationInFrames / 30)).toFixed(1)
+              : "0";
 
           return (
             <div
               key={scene.id}
               onClick={() => onSelectScene(scene.id)}
-              className={`rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
+              className={`rounded-2xl border transition-all cursor-pointer relative overflow-hidden group ${
                 isSelected
-                  ? "bg-studio-900/90 border-studio-accent shadow-lg shadow-studio-accent/10 ring-1 ring-studio-accent"
-                  : "bg-studio-900/40 border-studio-800/80 hover:border-studio-700 hover:bg-studio-900/60"
+                  ? "bg-studio-900/90 border-studio-accent shadow-xl shadow-studio-accent/10 ring-1 ring-studio-accent"
+                  : "bg-studio-900/40 border-white/[0.07] hover:border-white/15 hover:bg-studio-900/70"
               }`}
             >
+              {/* Left Accent Status Strip */}
+              <div
+                className={`absolute left-0 top-0 bottom-0 w-1 transition-colors ${
+                  isSelected
+                    ? "bg-studio-accent shadow-[0_0_10px_#6366f1]"
+                    : "bg-transparent group-hover:bg-white/20"
+                }`}
+              />
+
               {/* Scene Card Header */}
-              <div className="p-3 border-b border-studio-800/60 flex items-center justify-between text-xs bg-studio-950/40">
+              <div className="p-3 pl-4 border-b border-white/[0.06] flex items-center justify-between text-xs bg-studio-950/40">
                 <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-studio-800 text-indigo-300 font-mono font-bold flex items-center justify-center text-[10px]">
-                    {idx + 1}
-                  </span>
-                  <span className="font-semibold text-slate-200">Scene {idx + 1}</span>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  {/* Mascot mini avatar preview */}
+                  <div className="w-5 h-5 rounded-full overflow-hidden bg-studio-800 border border-white/10 shrink-0">
+                    <img
+                      src={POSE_AVATARS[scene.mascot.pose] || POSE_AVATARS.neutral}
+                      alt={scene.mascot.pose}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  <span className="font-bold text-slate-100">Scene {idx + 1}</span>
+
+                  <span className="text-[10px] text-slate-400 font-mono bg-studio-900 px-1.5 py-0.5 rounded border border-white/[0.06] tabular-nums">
                     {durationSeconds}s ({scene.durationInFrames}f)
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1">
-                  {/* Re-order buttons */}
+                {/* Actions */}
+                <div className="flex items-center gap-0.5 opacity-80 group-hover:opacity-100">
                   <button
                     disabled={idx === 0}
                     onClick={(e) => handleMove(idx, -1, e)}
-                    className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-20"
+                    className="p-1 text-slate-400 hover:text-white disabled:opacity-20 transition-colors"
                     title="Move Scene Up"
                   >
                     <ChevronUp className="w-3.5 h-3.5" />
@@ -444,24 +504,22 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
                   <button
                     disabled={idx === state.scenes.length - 1}
                     onClick={(e) => handleMove(idx, 1, e)}
-                    className="p-1 text-slate-500 hover:text-slate-300 disabled:opacity-20"
+                    className="p-1 text-slate-400 hover:text-white disabled:opacity-20 transition-colors"
                     title="Move Scene Down"
                   >
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
-                  {/* Duplicate */}
                   <button
                     onClick={(e) => handleDuplicateScene(scene, e)}
-                    className="p-1 text-slate-500 hover:text-slate-300"
+                    className="p-1 text-slate-400 hover:text-white transition-colors"
                     title="Duplicate Scene"
                   >
                     <Copy className="w-3.5 h-3.5" />
                   </button>
-                  {/* Delete */}
                   <button
                     disabled={state.scenes.length <= 1}
                     onClick={(e) => handleDeleteScene(scene.id, e)}
-                    className="p-1 text-slate-500 hover:text-red-400 disabled:opacity-20"
+                    className="p-1 text-slate-400 hover:text-red-400 disabled:opacity-20 transition-colors"
                     title="Delete Scene"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -470,23 +528,23 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
               </div>
 
               {/* Script Text Input (Core Semantic Anchor) */}
-              <div className="p-3">
+              <div className="p-3 pl-4">
                 <textarea
                   value={scene.scriptText}
                   onChange={(e) => handleScriptChange(scene.id, e.target.value)}
-                  placeholder="Type what should be spoken in this scene..."
+                  placeholder="Type spoken text for this scene..."
                   rows={3}
-                  className="w-full bg-studio-950/60 border border-studio-800 focus:border-studio-accent/70 rounded-xl p-2.5 text-xs text-slate-100 placeholder-slate-600 outline-none resize-none leading-relaxed transition-colors"
+                  className="w-full bg-studio-950/80 border border-white/[0.07] focus:border-studio-accent rounded-xl p-2.5 text-xs text-slate-100 placeholder-slate-600 outline-none resize-none leading-relaxed transition-all focus:ring-1 focus:ring-studio-accent"
                 />
 
                 {/* Badges / Layer Tags */}
-                <div className="mt-2.5 flex items-center flex-wrap gap-2 text-[10px]">
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-studio-800/80 text-slate-300 border border-studio-700/50">
+                <div className="mt-2.5 flex items-center flex-wrap gap-1.5 text-[10px]">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-studio-900 text-amber-300 border border-white/[0.06]">
                     <Smile className="w-3 h-3 text-amber-400" />
-                    <span>{scene.mascot.pose}</span>
+                    <span className="capitalize">{scene.mascot.pose}</span>
                   </span>
 
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-studio-800/80 text-slate-300 border border-studio-700/50">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-studio-900 text-slate-300 border border-white/[0.06]">
                     <span
                       className="w-2 h-2 rounded-full inline-block"
                       style={{
@@ -500,14 +558,14 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
                   </span>
 
                   {scene.overlays.length > 0 && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-950/60 text-indigo-300 border border-indigo-800/60">
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">
                       <Layers className="w-3 h-3 text-indigo-400" />
                       <span>{scene.overlays.length} overlay{scene.overlays.length > 1 ? "s" : ""}</span>
                     </span>
                   )}
 
-                  <span className="ml-auto text-[10px] text-slate-400 font-mono">
-                    {wordCount} words
+                  <span className="ml-auto text-[10px] text-slate-400 font-mono tabular-nums">
+                    {wordCount} words ({wordsPerSec} w/s)
                   </span>
                 </div>
               </div>
@@ -517,11 +575,11 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
 
         {/* Add Scene Card */}
         <button
-          onClick={handleAddScene}
-          className="w-full py-3 rounded-2xl border-2 border-dashed border-studio-800 hover:border-studio-accent/60 bg-studio-900/20 hover:bg-studio-900/50 text-slate-400 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all"
+          onClick={() => handleAddScene()}
+          className="w-full py-3.5 rounded-2xl border-2 border-dashed border-white/[0.08] hover:border-studio-accent/70 bg-studio-900/20 hover:bg-studio-900/60 text-slate-400 hover:text-white text-xs font-bold flex items-center justify-center gap-2 transition-all group"
         >
-          <Plus className="w-4 h-4" />
-          <span>Add New Scene</span>
+          <Plus className="w-4 h-4 text-studio-accent group-hover:scale-110 transition-transform" />
+          <span>Add New Scene Beat</span>
         </button>
       </div>
     </aside>

@@ -298,37 +298,37 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   };
 
   return (
-    <div className="min-h-screen w-full bg-studio-950 text-slate-100 flex flex-col font-sans select-none overflow-y-auto">
+    <div className="min-h-screen w-full bg-studio-975 text-slate-100 flex flex-col font-sans select-none overflow-y-auto">
       {/* Top Onboarding Header */}
-      <header className="h-16 border-b border-studio-800 bg-studio-900/40 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30">
+      <header className="h-16 border-b border-white/[0.07] bg-studio-950/80 backdrop-blur-2xl px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-studio-accent to-pink-500 flex items-center justify-center shadow-lg shadow-studio-accent/20">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-studio-accent via-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-studio-accent/25 border border-white/20">
             <Tv2 className="w-4 h-4 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-white text-base tracking-tight">ZeroTrack</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-studio-accent/20 text-indigo-400 px-2 py-0.5 rounded-full border border-studio-accent/30">
+              <span className="font-extrabold text-white text-base tracking-tight leading-none">ZeroTrack</span>
+              <span className="text-[9px] font-mono uppercase tracking-wider bg-studio-accent/20 text-indigo-300 px-1.5 py-0.5 rounded border border-studio-accent/30 font-bold">
                 AI Director
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 -mt-0.5">
+            <div className="text-[10px] text-slate-400 font-mono -mt-0.5">
               Deep Research & Semantic Script Engine
             </div>
           </div>
         </div>
 
-        {/* Step Indicator Progress Pills */}
-        <div className="hidden md:flex items-center gap-2 bg-studio-900 px-4 py-1.5 rounded-full border border-studio-800 text-xs">
+        {/* Step Indicator Progress Stepper with Connected Lines */}
+        <div className="hidden md:flex items-center gap-2.5 bg-studio-900/90 px-4 py-1.5 rounded-full border border-white/[0.08] text-xs shadow-inner">
           {[
             { num: 1, label: "Idea & Research" },
             { num: 2, label: "Researched Script" },
             { num: 3, label: "Visual References" },
             { num: 4, label: "Launch Studio" },
-          ].map((item) => (
+          ].map((item, idx) => (
             <React.Fragment key={item.num}>
               <div
-                className={`flex items-center gap-1.5 font-semibold ${
+                className={`flex items-center gap-2 font-semibold transition-colors ${
                   step === item.num
                     ? "text-studio-accent font-bold"
                     : step > item.num
@@ -337,9 +337,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
                 }`}
               >
                 <span
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] ${
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold font-mono transition-all ${
                     step === item.num
-                      ? "bg-studio-accent text-white"
+                      ? "bg-studio-accent text-white shadow-glowSm"
                       : step > item.num
                       ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
                       : "bg-studio-800 text-slate-500"
@@ -347,9 +347,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
                 >
                   {step > item.num ? "✓" : item.num}
                 </span>
-                <span>{item.label}</span>
+                <span className="text-xs">{item.label}</span>
               </div>
-              {item.num < 4 && <span className="text-studio-700">➔</span>}
+              {idx < 3 && <div className="w-4 h-px bg-white/10" />}
             </React.Fragment>
           ))}
         </div>
@@ -357,10 +357,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         {/* Skip to Studio direct option */}
         <button
           onClick={onSkipToStudio}
-          className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 py-1.5 px-3 rounded-lg hover:bg-studio-900 border border-transparent hover:border-studio-800"
+          className="text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-1.5 py-1.5 px-3 rounded-xl hover:bg-studio-900 border border-white/[0.06] hover:border-white/15"
         >
           <span>Open Blank Studio</span>
-          <ArrowRight className="w-3.5 h-3.5" />
+          <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
         </button>
       </header>
 

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { MasterVideoState } from "@/types/schema";
-import { Download, CheckCircle2, AlertCircle, Loader2, X, Play, Film } from "lucide-react";
+import { Download, CheckCircle2, AlertCircle, Loader2, X, Play, Film, Sparkles } from "lucide-react";
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -14,6 +14,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, state, onClose
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const isPortrait = state.metadata.height > state.metadata.width;
+  const durationSec = (state.metadata.totalDurationInFrames / state.metadata.fps).toFixed(1);
 
   const handleStartRender = async () => {
     setIsRendering(true);
@@ -41,96 +44,94 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, state, onClose
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-studio-900 border border-studio-700 rounded-2xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 relative">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 select-none">
+      <div className="w-full max-w-lg bg-studio-900/95 border border-white/[0.12] rounded-3xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-studio-800 transition-colors"
+          className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-xl hover:bg-studio-800 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
 
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-studio-accent to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-studio-accent via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 border border-white/20">
             <Film className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-white text-base">Export MP4 Video</h3>
-            <p className="text-xs text-slate-400">
-              High Performance Local Remotion Node.js Engine
+            <h3 className="font-bold text-white text-base">Export MP4 Master</h3>
+            <p className="text-xs text-slate-400 font-mono">
+              High Performance Local Remotion Engine
             </p>
           </div>
         </div>
 
-        {/* Export Spec Summary */}
-        <div className="bg-studio-950 rounded-xl p-4 border border-studio-800 space-y-2 text-xs">
+        {/* Video Specs Card */}
+        <div className="bg-studio-950 rounded-2xl p-4 border border-white/[0.06] space-y-2.5 text-xs">
           <div className="flex items-center justify-between text-slate-300">
             <span className="text-slate-400">Resolution</span>
             <span className="font-mono font-bold text-white">
-              {state.metadata.width} × {state.metadata.height} (
-              {state.metadata.height > state.metadata.width ? "9:16 Vertical" : "16:9 Landscape"}
-              )
+              {state.metadata.width} × {state.metadata.height} ({isPortrait ? "9:16 Vertical" : "16:9 Landscape"})
             </span>
           </div>
           <div className="flex items-center justify-between text-slate-300">
             <span className="text-slate-400">Frame Rate</span>
-            <span className="font-mono font-bold text-white">{state.metadata.fps} FPS</span>
+            <span className="font-mono font-bold text-emerald-400">{state.metadata.fps} FPS Constant</span>
           </div>
           <div className="flex items-center justify-between text-slate-300">
-            <span className="text-slate-400">Total Frames</span>
-            <span className="font-mono font-bold text-white">
-              {state.metadata.totalDurationInFrames}f (
-              {(state.metadata.totalDurationInFrames / state.metadata.fps).toFixed(1)}s)
+            <span className="text-slate-400">Duration</span>
+            <span className="font-mono font-bold text-white tabular-nums">
+              {state.metadata.totalDurationInFrames} frames ({durationSec}s)
             </span>
           </div>
           <div className="flex items-center justify-between text-slate-300">
-            <span className="text-slate-400">Scenes</span>
-            <span className="font-mono font-bold text-white">{state.scenes.length} Scenes</span>
+            <span className="text-slate-400">Scenes & Layers</span>
+            <span className="font-mono font-bold text-indigo-300">{state.scenes.length} Scenes Rigged</span>
           </div>
         </div>
 
-        {/* Error message */}
+        {/* Error notification */}
         {error && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+          <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-xs text-rose-300 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* Download Link when finished */}
-        {downloadUrl && (
-          <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>MP4 Video Rendered Successfully!</span>
+        {/* Render Complete state */}
+        {downloadUrl ? (
+          <div className="space-y-3 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-white text-sm">MP4 Video Ready for Download</h4>
+              <p className="text-xs text-slate-400 mt-0.5">Rendered locally with hardware-accelerated Chrome</p>
             </div>
             <a
               href={downloadUrl}
               download
-              className="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-extrabold text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 inline-flex"
             >
               <Download className="w-4 h-4" />
-              <span>Download MP4 Video</span>
+              <span>Download MP4 File</span>
             </a>
           </div>
-        )}
-
-        {/* Action Button */}
-        {!downloadUrl && (
+        ) : (
+          /* Render Trigger */
           <button
             onClick={handleStartRender}
             disabled={isRendering}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-studio-accent to-indigo-600 hover:from-indigo-500 hover:to-indigo-600 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-studio-accent via-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-xl shadow-indigo-600/30 border border-white/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {isRendering ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Bundling & Rendering MP4 (takes ~5-15s)...</span>
+                <span>Rendering Frame Sequence (Remotion CLI)...</span>
               </>
             ) : (
               <>
-                <Film className="w-4 h-4" />
-                <span>Start Remotion Render</span>
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Start Video Render Now</span>
               </>
             )}
           </button>
