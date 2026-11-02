@@ -3,26 +3,34 @@ import { spring, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
 
 interface VersusBattleOverlayProps {
   title?: string;
+  heading?: string;
   leftName?: string;
   leftStat?: string;
+  leftSub?: string;
   leftColor?: string;
   rightName?: string;
   rightStat?: string;
+  rightSub?: string;
   rightColor?: string;
 }
 
 export const VersusBattleOverlay: React.FC<VersusBattleOverlayProps> = ({
-  title = "HEAD TO HEAD",
+  title,
+  heading,
   leftName = "Contender A",
   leftStat = "20 Titles",
+  leftSub,
   leftColor = "#ef4444",
   rightName = "Contender B",
   rightStat = "19 Titles",
+  rightSub,
   rightColor = "#38bdf8",
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const isPortrait = height > width;
+
+  const effectiveTitle = heading || title || "HEAD TO HEAD";
 
   const enterSpring = spring({
     frame,
@@ -47,12 +55,14 @@ export const VersusBattleOverlay: React.FC<VersusBattleOverlayProps> = ({
         opacity,
         background: "rgba(10, 15, 29, 0.9)",
         backdropFilter: "blur(18px)",
-        padding: isPortrait ? "24px 28px" : "18px 24px",
+        padding: isPortrait ? "24px 30px" : "18px 24px",
         borderRadius: 26,
         border: "1.5px solid rgba(255, 255, 255, 0.16)",
         boxShadow: "0 24px 50px rgba(0, 0, 0, 0.75)",
         fontFamily: "Inter, sans-serif",
-        minWidth: isPortrait ? 450 : 380,
+        width: isPortrait ? 560 : 480,
+        maxWidth: "100%",
+        boxSizing: "border-box",
       }}
     >
       <div
@@ -66,7 +76,7 @@ export const VersusBattleOverlay: React.FC<VersusBattleOverlayProps> = ({
           textTransform: "uppercase",
         }}
       >
-        {title}
+        {effectiveTitle}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18 }}>
@@ -95,6 +105,11 @@ export const VersusBattleOverlay: React.FC<VersusBattleOverlayProps> = ({
           >
             {leftStat}
           </div>
+          {leftSub && (
+            <div style={{ fontSize: isPortrait ? 12 : 10, color: "#94a3b8", marginTop: 4, fontWeight: 600 }}>
+              {leftSub}
+            </div>
+          )}
         </div>
 
         {/* VS Badge */}
@@ -143,6 +158,11 @@ export const VersusBattleOverlay: React.FC<VersusBattleOverlayProps> = ({
           >
             {rightStat}
           </div>
+          {rightSub && (
+            <div style={{ fontSize: isPortrait ? 12 : 10, color: "#94a3b8", marginTop: 4, fontWeight: 600 }}>
+              {rightSub}
+            </div>
+          )}
         </div>
       </div>
     </div>

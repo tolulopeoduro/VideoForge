@@ -21,8 +21,8 @@ export const LowerThirdOverlay: React.FC<LowerThirdProps> = ({
     config: { damping: 14, mass: 0.7, stiffness: 90 },
   });
 
-  const translateX = interpolate(entrance, [0, 1], [-100, 0]);
-  const opacity = interpolate(entrance, [0, 0.4, 1], [0, 0.8, 1]);
+  const translateY = interpolate(entrance, [0, 1], [-40, 0]);
+  const opacity = interpolate(entrance, [0, 0.4, 1], [0, 0.85, 1]);
   const lineWidth = interpolate(frame, [5, 30], [0, 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -31,28 +31,33 @@ export const LowerThirdOverlay: React.FC<LowerThirdProps> = ({
   return (
     <div
       style={{
-        transform: `translateX(${translateX}px)`,
+        transform: `translateY(${translateY}px)`,
         opacity,
         display: "flex",
         flexDirection: "column",
+        alignItems: "center",
+        textAlign: "center",
         gap: 6,
-        padding: "18px 28px",
+        padding: "20px 34px",
         background: "rgba(10, 15, 29, 0.9)",
         backdropFilter: "blur(20px)",
-        border: "1px solid rgba(255, 255, 255, 0.12)",
-        borderLeft: "6px solid #6366f1",
-        borderRadius: "0 16px 16px 0",
-        maxWidth: 580,
+        border: "1.5px solid rgba(255, 255, 255, 0.14)",
+        borderRadius: 22,
+        minWidth: 360,
+        maxWidth: 640,
         boxShadow: "0 25px 50px rgba(0, 0, 0, 0.55)",
       }}
     >
       <div
         style={{
-          fontSize: 14,
-          fontWeight: 700,
+          fontSize: 13,
+          fontWeight: 800,
           color: "#818cf8",
-          letterSpacing: "0.15em",
+          letterSpacing: "0.16em",
           textTransform: "uppercase",
+          background: "rgba(99, 102, 241, 0.16)",
+          padding: "4px 12px",
+          borderRadius: 999,
         }}
       >
         {category}
@@ -60,7 +65,7 @@ export const LowerThirdOverlay: React.FC<LowerThirdProps> = ({
       <div
         style={{
           fontSize: 28,
-          fontWeight: 800,
+          fontWeight: 900,
           color: "#ffffff",
           letterSpacing: "-0.02em",
           lineHeight: 1.2,
@@ -79,11 +84,11 @@ export const LowerThirdOverlay: React.FC<LowerThirdProps> = ({
       </div>
       <div
         style={{
-          height: 2,
+          height: 3,
           width: `${lineWidth}%`,
           background: "linear-gradient(90deg, #6366f1 0%, #ec4899 100%)",
           marginTop: 6,
-          borderRadius: 2,
+          borderRadius: 999,
         }}
       />
     </div>

@@ -4,19 +4,26 @@ import { spring, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
 interface TimelineMilestoneOverlayProps {
   year?: string;
   eventTitle?: string;
+  title?: string;
   detail?: string;
+  description?: string;
   accentColor?: string;
 }
 
 export const TimelineMilestoneOverlay: React.FC<TimelineMilestoneOverlayProps> = ({
   year = "1999",
-  eventTitle = "Historic Milestone",
-  detail = "Pivotal turning point in modern history",
+  eventTitle,
+  title,
+  detail,
+  description,
   accentColor = "#10b981",
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const isPortrait = height > width;
+
+  const effectiveTitle = title || eventTitle || "Historic Milestone";
+  const effectiveDetail = description || detail || "Pivotal turning point in modern history";
 
   const progress = spring({
     frame,
@@ -34,11 +41,13 @@ export const TimelineMilestoneOverlay: React.FC<TimelineMilestoneOverlayProps> =
         opacity: progress,
         background: "rgba(10, 15, 29, 0.9)",
         backdropFilter: "blur(18px)",
-        padding: isPortrait ? "22px 28px" : "16px 22px",
+        padding: isPortrait ? "24px 30px" : "18px 24px",
         borderRadius: 24,
         border: "1.5px solid rgba(255,255,255,0.15)",
         boxShadow: "0 24px 48px rgba(0, 0, 0, 0.7)",
-        minWidth: isPortrait ? 400 : 330,
+        width: isPortrait ? 520 : 440,
+        maxWidth: "100%",
+        boxSizing: "border-box",
         fontFamily: "Inter, sans-serif",
       }}
     >
@@ -77,11 +86,11 @@ export const TimelineMilestoneOverlay: React.FC<TimelineMilestoneOverlayProps> =
       </div>
 
       <div style={{ fontSize: isPortrait ? 24 : 18, fontWeight: 900, color: "#ffffff" }}>
-        {eventTitle}
+        {effectiveTitle}
       </div>
-      {detail && (
+      {effectiveDetail && (
         <div style={{ fontSize: isPortrait ? 16 : 13, color: "#94a3b8", marginTop: 4, fontWeight: 500 }}>
-          {detail}
+          {effectiveDetail}
         </div>
       )}
     </div>

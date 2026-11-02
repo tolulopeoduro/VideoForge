@@ -57,48 +57,59 @@ export const MascotLayer: React.FC<MascotLayerProps> = ({ mascot }) => {
     transform = `translateY(${idleY}px) rotate(${idleRotate}deg)`;
   }
 
-  // Positioning horizontal placement
-  // In portrait (1080x1920) or landscape (1920x1080)
+  // Positioning in Portrait (1080x1920) vs Landscape (1920x1080)
+  // Using a full-width flex wrapper guarantees exact horizontal alignment without transform-origin drift
   const isPortrait = height > width;
-  const mascotWidth = isPortrait ? 520 : 460;
-  const mascotHeight = isPortrait ? 720 : 640;
+  const mascotWidth = isPortrait ? 430 : 340;
+  const mascotHeight = isPortrait ? 570 : 450;
 
-  let leftPos = "50%";
-  let alignTranslateX = "-50%";
-
+  let horizontalOffsetPx = 0;
   if (mascot.position === "left") {
-    leftPos = isPortrait ? "26%" : "22%";
-    alignTranslateX = "-50%";
+    horizontalOffsetPx = isPortrait ? -190 : -590;
   } else if (mascot.position === "right") {
-    leftPos = isPortrait ? "74%" : "78%";
-    alignTranslateX = "-50%";
+    horizontalOffsetPx = isPortrait ? 190 : 590;
   }
+
+  const bottomOffsetPx = isPortrait
+    ? 300
+    : mascot.position === "center"
+    ? 170
+    : 48;
 
   return (
     <div
       style={{
         position: "absolute",
-        bottom: isPortrait ? 180 : 60,
-        left: leftPos,
-        width: mascotWidth,
-        height: mascotHeight,
-        transform: `translateX(${alignTranslateX}) ${transform}`,
-        opacity,
-        transformOrigin: "bottom center",
+        bottom: bottomOffsetPx,
+        left: 0,
+        right: 0,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "flex-end",
         pointerEvents: "none",
         zIndex: 20,
-        filter: "drop-shadow(0 20px 30px rgba(0, 0, 0, 0.55))",
       }}
     >
-      <img
-        src={poseSrc}
-        alt="Brand Mascot"
+      <div
         style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
+          width: mascotWidth,
+          height: mascotHeight,
+          transform: `translateX(${horizontalOffsetPx}px) ${transform}`,
+          opacity,
+          transformOrigin: "bottom center",
+          filter: "drop-shadow(0 20px 30px rgba(0, 0, 0, 0.55))",
         }}
-      />
+      >
+        <img
+          src={poseSrc}
+          alt="Brand Mascot"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+          }}
+        />
+      </div>
     </div>
   );
 };

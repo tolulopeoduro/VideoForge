@@ -83,40 +83,25 @@ export const CaptionsLayer: React.FC<CaptionsLayerProps> = ({ scene }) => {
   const chunkStart = Math.floor(safeIdx / CHUNK_SIZE) * CHUNK_SIZE;
   const visibleTokens = tokens.slice(chunkStart, chunkStart + CHUNK_SIZE);
 
-  // 4. Mascot-aware intelligent placement so subtitles NEVER block mascot face/torso
-  const mascot = scene.mascot;
-  let captionBottom = isPortrait ? 360 : 80;
-  let captionLeft = "50%";
-  let captionTransform = "translateX(-50%)";
-
-  if (mascot && mascot.isVisible) {
-    if (mascot.position === "center") {
-      // Position above mascot head in center
-      captionBottom = isPortrait ? 520 : 120;
-    } else if (mascot.position === "left") {
-      // Shift toward center-right
-      captionLeft = isPortrait ? "56%" : "54%";
-      captionBottom = isPortrait ? 380 : 90;
-    } else if (mascot.position === "right") {
-      // Shift toward center-left
-      captionLeft = isPortrait ? "44%" : "46%";
-      captionBottom = isPortrait ? 380 : 90;
-    }
-  }
+  // 4. Dedicated bottom stage placement: always 100% horizontally centered
+  // Mascot sits above this stage (bottom: 300px in portrait), so captions never shift off-center.
+  const captionBottom = isPortrait ? 110 : 44;
 
   return (
     <div
       style={{
         position: "absolute",
         bottom: captionBottom,
-        left: captionLeft,
-        transform: captionTransform,
-        width: isPortrait ? "90%" : "75%",
-        maxWidth: isPortrait ? 920 : 1100,
+        left: 0,
+        right: 0,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: isPortrait ? "0 48px" : "0 120px",
+        boxSizing: "border-box",
         textAlign: "center",
         zIndex: 35,
         pointerEvents: "none",
-        transition: "bottom 0.2s ease, left 0.2s ease",
       }}
     >
       <div

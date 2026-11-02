@@ -16,7 +16,7 @@ interface OverlaysLayerProps {
   mascot: Scene["mascot"];
 }
 
-export const OverlaysLayer: React.FC<OverlaysLayerProps> = ({ overlays, mascot }) => {
+export const OverlaysLayer: React.FC<OverlaysLayerProps> = ({ overlays }) => {
   const { width, height } = useVideoConfig();
   const isPortrait = height > width;
 
@@ -24,91 +24,61 @@ export const OverlaysLayer: React.FC<OverlaysLayerProps> = ({ overlays, mascot }
     return null;
   }
 
-  const topOverlays = overlays.filter((o) => o.type !== "lower-third");
-  const lowerThirdOverlays = overlays.filter((o) => o.type === "lower-third");
-
-  // Top overlays placement (positioned cleanly in upper half of screen)
-  let topAlignment: React.CSSProperties = {
+  // All overlays are rendered in a dead-center horizontal flex container in the upper stage
+  // so they are never pushed off-center by the mascot.
+  const containerStyle: React.CSSProperties = {
     position: "absolute",
-    top: isPortrait ? "10%" : "10%",
-    left: "50%",
-    transform: "translateX(-50%)",
+    top: isPortrait ? 115 : 64,
+    left: 0,
+    right: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    padding: isPortrait ? "0 48px" : "0 80px",
+    boxSizing: "border-box",
     zIndex: 25,
+    pointerEvents: "none",
   };
-
-  if (mascot.isVisible && mascot.position === "right") {
-    topAlignment = {
-      position: "absolute",
-      top: isPortrait ? "10%" : "10%",
-      left: isPortrait ? "6%" : "8%",
-      zIndex: 25,
-    };
-  } else if (mascot.isVisible && mascot.position === "left") {
-    topAlignment = {
-      position: "absolute",
-      top: isPortrait ? "10%" : "10%",
-      right: isPortrait ? "6%" : "8%",
-      zIndex: 25,
-    };
-  }
-
-  // Lower Third overlays placement (situated safely above bottom captions)
-  let lowerAlignment: React.CSSProperties = {
-    position: "absolute",
-    top: isPortrait ? "12%" : "14%",
-    left: isPortrait ? "6%" : "8%",
-    zIndex: 26,
-  };
-
-  if (mascot.isVisible && mascot.position === "left") {
-    lowerAlignment = {
-      position: "absolute",
-      top: isPortrait ? "12%" : "14%",
-      right: isPortrait ? "6%" : "8%",
-      zIndex: 26,
-    };
-  }
 
   return (
-    <>
-      {topOverlays.length > 0 && (
-        <div style={topAlignment}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {topOverlays.map((overlay) => {
-              switch (overlay.type) {
-                case "stat-counter":
-                  return <StatCounterOverlay key={overlay.id} {...overlay.props} />;
-                case "progress-ring":
-                  return <ProgressRingOverlay key={overlay.id} {...overlay.props} />;
-                case "code-snippet":
-                  return <CodeSnippetOverlay key={overlay.id} {...overlay.props} />;
-                case "bar-chart":
-                  return <BarChartOverlay key={overlay.id} {...overlay.props} />;
-                case "versus-battle":
-                  return <VersusBattleOverlay key={overlay.id} {...overlay.props} />;
-                case "quote-card":
-                  return <QuoteCardOverlay key={overlay.id} {...overlay.props} />;
-                case "timeline-milestone":
-                  return <TimelineMilestoneOverlay key={overlay.id} {...overlay.props} />;
-                case "kinetic-title":
-                  return <KineticTitleOverlay key={overlay.id} {...overlay.props} />;
-                default:
-                  return null;
-              }
-            })}
-          </div>
-        </div>
-      )}
-
-      {lowerThirdOverlays.length > 0 && (
-        <div style={lowerAlignment}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {lowerThirdOverlays.map((overlay) => (
-              <LowerThirdOverlay key={overlay.id} {...overlay.props} />
-            ))}
-          </div>
-        </div>
-      )}
-    </>
+    <div style={containerStyle}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: isPortrait ? 20 : 14,
+          width: "100%",
+          maxWidth: isPortrait ? 920 : 860,
+        }}
+      >
+        {overlays.map((overlay) => {
+          switch (overlay.type) {
+            case "stat-counter":
+              return <StatCounterOverlay key={overlay.id} {...overlay.props} />;
+            case "lower-third":
+              return <LowerThirdOverlay key={overlay.id} {...overlay.props} />;
+            case "progress-ring":
+              return <ProgressRingOverlay key={overlay.id} {...overlay.props} />;
+            case "code-snippet":
+              return <CodeSnippetOverlay key={overlay.id} {...overlay.props} />;
+            case "bar-chart":
+              return <BarChartOverlay key={overlay.id} {...overlay.props} />;
+            case "versus-battle":
+              return <VersusBattleOverlay key={overlay.id} {...overlay.props} />;
+            case "quote-card":
+              return <QuoteCardOverlay key={overlay.id} {...overlay.props} />;
+            case "timeline-milestone":
+              return <TimelineMilestoneOverlay key={overlay.id} {...overlay.props} />;
+            case "kinetic-title":
+              return <KineticTitleOverlay key={overlay.id} {...overlay.props} />;
+            default:
+              return null;
+          }
+        })}
+      </div>
+    </div>
   );
 };
