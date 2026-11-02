@@ -1,3 +1,45 @@
+export type SlideTransitionStyle =
+  | "fade"
+  | "slide-left"
+  | "zoom-punch"
+  | "wipe-up"
+  | "flip-3d"
+  | "cut";
+
+export type ThreeDScenePreset =
+  | "none"
+  | "cyber-globe"
+  | "floating-cubes"
+  | "neural-network"
+  | "energy-torus"
+  | "starfield-warp"
+  | "trophy-arena";
+
+export type CaptionVisualStyle =
+  | "hormozi"
+  | "karaoke-pill"
+  | "cinema-minimal"
+  | "neon-cyber";
+
+export type CameraMotionType =
+  | "zoom-in"
+  | "zoom-out"
+  | "pan-left"
+  | "pan-right"
+  | "tilt-3d"
+  | "static";
+
+export type GraphicOverlayType =
+  | "stat-counter"
+  | "lower-third"
+  | "progress-ring"
+  | "code-snippet"
+  | "bar-chart"
+  | "versus-battle"
+  | "quote-card"
+  | "timeline-milestone"
+  | "kinetic-title";
+
 export interface MasterVideoState {
   id: string;
   metadata: {
@@ -25,11 +67,17 @@ export interface Scene {
   scriptText: string;
   wordTokens: WordToken[];
 
-  // Visual layers (Base -> Middle -> Top)
+  // Slide transition & 3D WebGL scene options
+  transitionStyle?: SlideTransitionStyle;
+  threeDScene?: ThreeDScenePreset;
+  threeDColor?: string;
+  captionStyle?: CaptionVisualStyle;
+
+  // Visual layers (Base -> 3D -> Overlays -> Mascot -> Captions)
   background: {
     type: "flux_klein" | "stock" | "color";
-    src: string; // URL or local path
-    motion: "zoom-in" | "pan-left" | "static"; // Dynamic Ken Burns triggers
+    src: string; // URL or local path or hex color
+    motion: CameraMotionType;
     prompt?: string;
   };
 
@@ -52,7 +100,7 @@ export interface WordToken {
 
 export interface GraphicOverlay {
   id: string;
-  type: "stat-counter" | "lower-third" | "progress-ring" | "code-snippet";
+  type: GraphicOverlayType;
   // Allows the LLM and UI to pass arbitrary data to the React component
   props: Record<string, any>;
 }
@@ -62,7 +110,7 @@ export interface VisualReferenceItem {
   sceneId: string;
   title: string;
   description: string;
-  reason: string; // e.g. "FLUX cannot generate real trademarked logos or real person likenesses accurately"
+  reason: string;
   assetType: "brand_logo" | "person_photo" | "product_ui" | "style_reference";
   providedUrl?: string;
   status: "pending" | "provided" | "using_ai_fallback";

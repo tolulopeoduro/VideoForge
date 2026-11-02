@@ -1,14 +1,18 @@
 import React, { useState } from "react";
-import { MasterVideoState, Scene, GraphicOverlay } from "@/types/schema";
+import {
+  MasterVideoState,
+  Scene,
+  GraphicOverlay,
+  ThreeDScenePreset,
+  SlideTransitionStyle,
+  CameraMotionType,
+} from "@/types/schema";
 import {
   Sliders,
   Sparkles,
   Smile,
   Image as ImageIcon,
   Layers,
-  Move,
-  Play,
-  Plus,
   Trash2,
   Wand2,
   Loader2,
@@ -19,14 +23,18 @@ import {
   PieChart,
   Eye,
   EyeOff,
-  Compass,
-  ArrowUpRight,
   Trophy,
   Landmark,
   Coins,
   Orbit,
   Cpu,
   Film,
+  Box,
+  BarChart3,
+  Swords,
+  Quote,
+  Clock,
+  Type,
 } from "lucide-react";
 
 interface RightInspectorPanelProps {
@@ -45,6 +53,34 @@ const MASCOT_POSES: Array<{
   { id: "explaining", label: "Explaining", preview: "/mascot/explaining.svg", desc: "Open palms presentation" },
   { id: "shocked", label: "Shocked", preview: "/mascot/shocked.svg", desc: "Gasp & high energy impact" },
   { id: "pointing", label: "Pointing", preview: "/mascot/pointing.svg", desc: "Directing viewer focus" },
+];
+
+const THREE_D_PRESETS: Array<{ id: ThreeDScenePreset; label: string; desc: string }> = [
+  { id: "cyber-globe", label: "Cyber Globe", desc: "3D geodesic sphere & orbital rings" },
+  { id: "floating-cubes", label: "3D Polyhedra", desc: "Floating isometric data crystals" },
+  { id: "neural-network", label: "Neural Web", desc: "3D interconnected synaptic nodes" },
+  { id: "energy-torus", label: "Energy Torus", desc: "Rotating 3D sacred geometry knot" },
+  { id: "trophy-arena", label: "3D Trophy", desc: "Metallic gold championship emblem" },
+  { id: "starfield-warp", label: "Warp Tunnel", desc: "High-speed 3D depth starfield" },
+  { id: "none", label: "None (2D Only)", desc: "Disable WebGL 3D layer" },
+];
+
+const SLIDE_TRANSITIONS: Array<{ id: SlideTransitionStyle; label: string }> = [
+  { id: "zoom-punch", label: "Zoom Punch" },
+  { id: "slide-left", label: "Whip Slide" },
+  { id: "flip-3d", label: "3D Card Flip" },
+  { id: "wipe-up", label: "Vertical Wipe" },
+  { id: "fade", label: "Cross Dissolve" },
+  { id: "cut", label: "Hard Cut" },
+];
+
+const CAMERA_MOTIONS: Array<{ id: CameraMotionType; label: string }> = [
+  { id: "zoom-in", label: "Zoom In" },
+  { id: "zoom-out", label: "Zoom Out" },
+  { id: "pan-left", label: "Pan Left" },
+  { id: "pan-right", label: "Pan Right" },
+  { id: "tilt-3d", label: "3D Tilt" },
+  { id: "static", label: "Static" },
 ];
 
 const COLOR_PRESETS = [
@@ -97,7 +133,7 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
   onUpdateState,
 }) => {
   const [isGeneratingBg, setIsGeneratingBg] = useState(false);
-  const [activeTab, setActiveTab] = useState<"background" | "mascot" | "overlays">("background");
+  const [activeTab, setActiveTab] = useState<"background" | "3d" | "mascot" | "overlays">("3d");
 
   const scene = state.scenes.find((s) => s.id === selectedSceneId);
   const sceneIdx = state.scenes.findIndex((s) => s.id === selectedSceneId);
@@ -163,6 +199,46 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
       props = { label: "Progress", percentage: 95, color: "#10b981" };
     } else if (type === "code-snippet") {
       props = { filename: "engine.ts", code: `const duration = audio.length;\nlock(duration * 30);` };
+    } else if (type === "bar-chart") {
+      props = {
+        title: "Market Comparison",
+        unit: "%",
+        bars: [
+          { label: "Top Contender", value: 94, color: "#6366f1" },
+          { label: "Runner Up", value: 68, color: "#38bdf8" },
+          { label: "Average", value: 42, color: "#64748b" },
+        ],
+      };
+    } else if (type === "versus-battle") {
+      props = {
+        title: "HEAD TO HEAD",
+        leftName: "Manchester Utd",
+        leftStat: "20 Titles",
+        leftColor: "#ef4444",
+        rightName: "Liverpool",
+        rightStat: "19 Titles",
+        rightColor: "#38bdf8",
+      };
+    } else if (type === "quote-card") {
+      props = {
+        quote: "Relentless reinvention is the only path to staying at the top.",
+        author: "Studio Insight",
+        role: "Core Principle",
+        accentColor: "#f59e0b",
+      };
+    } else if (type === "timeline-milestone") {
+      props = {
+        year: "1999",
+        eventTitle: "Historic Treble Victory",
+        detail: "Champions League, Premier League & FA Cup",
+        accentColor: "#10b981",
+      };
+    } else if (type === "kinetic-title") {
+      props = {
+        topTag: "BREAKING INSIGHT",
+        headline: "UNSTOPPABLE DYNASTY",
+        accentColor: "#6366f1",
+      };
     }
 
     updateScene((s) => ({
@@ -200,24 +276,36 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
         </span>
       </div>
 
-      {/* Segmented Tab Navigation with Sleek Pill Design */}
+      {/* 4-Tab Segmented Navigation */}
       <div className="p-2 border-b border-white/[0.07] bg-studio-950/40">
-        <div className="grid grid-cols-3 gap-1 bg-studio-900 p-1 rounded-xl border border-white/[0.06] text-xs">
+        <div className="grid grid-cols-4 gap-1 bg-studio-900 p-1 rounded-xl border border-white/[0.06] text-[11px]">
+          <button
+            onClick={() => setActiveTab("3d")}
+            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all ${
+              activeTab === "3d"
+                ? "bg-cyan-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Box className="w-3.5 h-3.5" />
+            <span>3D & FX</span>
+          </button>
+
           <button
             onClick={() => setActiveTab("background")}
-            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all ${
+            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all ${
               activeTab === "background"
                 ? "bg-studio-accent text-white shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5" />
-            <span>Visual</span>
+            <span>Bg</span>
           </button>
 
           <button
             onClick={() => setActiveTab("mascot")}
-            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all ${
+            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all ${
               activeTab === "mascot"
                 ? "bg-amber-500 text-white shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
@@ -229,33 +317,132 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
 
           <button
             onClick={() => setActiveTab("overlays")}
-            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all ${
+            className={`py-1.5 rounded-lg font-bold flex items-center justify-center gap-1 transition-all ${
               activeTab === "overlays"
                 ? "bg-indigo-600 text-white shadow-sm"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Layers ({scene.overlays.length})</span>
+            <span>Overlays</span>
           </button>
         </div>
       </div>
 
       {/* Tab Contents */}
       <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar">
+        {/* ================= 3D & TRANSITIONS TAB ================= */}
+        {activeTab === "3d" && (
+          <div className="space-y-4">
+            {/* Three.js WebGL 3D Scene Selector */}
+            <div className="bg-studio-900/60 border border-white/[0.08] rounded-2xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                  <Box className="w-3.5 h-3.5" />
+                  Three.js 3D WebGL Layer
+                </span>
+                <span className="text-[10px] font-mono text-slate-400">60 FPS Synced</span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-1.5">
+                {THREE_D_PRESETS.map((preset) => {
+                  const currentPreset = scene.threeDScene || "cyber-globe";
+                  const isSelected = currentPreset === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      onClick={() =>
+                        updateScene((s) => ({
+                          ...s,
+                          threeDScene: preset.id,
+                        }))
+                      }
+                      className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${
+                        isSelected
+                          ? "bg-cyan-500/15 border-cyan-400/60 text-white shadow-sm"
+                          : "bg-studio-950/70 border-white/[0.06] text-slate-300 hover:bg-studio-900"
+                      }`}
+                    >
+                      <div>
+                        <div className="text-xs font-bold">{preset.label}</div>
+                        <div className="text-[10px] text-slate-400">{preset.desc}</div>
+                      </div>
+                      {isSelected && <Check className="w-4 h-4 text-cyan-400" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 3D Accent Color Swatches */}
+              <div className="pt-2 border-t border-white/[0.06]">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                  3D Mesh & Light Accent Color
+                </label>
+                <div className="flex items-center gap-2">
+                  {["#6366f1", "#ef4444", "#10b981", "#f59e0b", "#38bdf8", "#ec4899"].map(
+                    (hex) => (
+                      <button
+                        key={hex}
+                        onClick={() => updateScene((s) => ({ ...s, threeDColor: hex }))}
+                        style={{ backgroundColor: hex }}
+                        className={`w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 ${
+                          (scene.threeDColor || "#6366f1") === hex
+                            ? "border-white scale-110"
+                            : "border-transparent"
+                        }`}
+                      />
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Remotion Slide Transition Style */}
+            <div className="bg-studio-900/50 border border-white/[0.08] rounded-2xl p-3.5 space-y-2.5">
+              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+                Remotion Slide Transition
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {SLIDE_TRANSITIONS.map((tr) => {
+                  const activeTr = scene.transitionStyle || "zoom-punch";
+                  return (
+                    <button
+                      key={tr.id}
+                      onClick={() =>
+                        updateScene((s) => ({
+                          ...s,
+                          transitionStyle: tr.id,
+                        }))
+                      }
+                      className={`py-2 px-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                        activeTr === tr.id
+                          ? "bg-studio-accent/25 border-studio-accent text-white"
+                          : "bg-studio-950 border-white/[0.06] text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {tr.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ================= BACKGROUND TAB ================= */}
         {activeTab === "background" && (
           <div className="space-y-4">
-            {/* Layer Type */}
             <div>
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                Background Type
+                Background Layer Type
               </label>
               <div className="grid grid-cols-3 gap-1.5 bg-studio-900 p-1 rounded-xl border border-white/[0.06] text-xs">
                 {(["color", "flux_klein", "stock"] as const).map((t) => (
                   <button
                     key={t}
-                    onClick={() => updateScene((s) => ({ ...s, background: { ...s.background, type: t } }))}
+                    onClick={() =>
+                      updateScene((s) => ({ ...s, background: { ...s.background, type: t } }))
+                    }
                     className={`py-1.5 rounded-lg font-bold capitalize transition-all ${
                       scene.background.type === t
                         ? "bg-studio-accent text-white shadow-sm"
@@ -306,9 +493,10 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                 className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-xl p-2.5 text-xs text-slate-200 outline-none resize-none leading-relaxed"
               />
 
-              {/* Genre Quick-Tags */}
               <div className="space-y-1.5">
-                <span className="text-[10px] text-slate-500 font-semibold block">Quick Genre Atmospheric Themes:</span>
+                <span className="text-[10px] text-slate-500 font-semibold block">
+                  Quick Genre Atmospheric Themes:
+                </span>
                 <div className="flex items-center flex-wrap gap-1">
                   {GENRE_PROMPT_PRESETS.map((p, idx) => {
                     const Icon = p.icon;
@@ -382,28 +570,28 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
               </div>
             )}
 
-            {/* Ken Burns Dynamic Motion */}
+            {/* 6 Camera Motion Modes */}
             <div className="bg-studio-900/40 border border-white/[0.08] rounded-2xl p-3.5 space-y-2.5">
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-                Ken Burns Camera Motion
+                Camera Motion (6 Modes)
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {(["zoom-in", "pan-left", "static"] as const).map((m) => (
+                {CAMERA_MOTIONS.map((m) => (
                   <button
-                    key={m}
+                    key={m.id}
                     onClick={() =>
                       updateScene((s) => ({
                         ...s,
-                        background: { ...s.background, motion: m },
+                        background: { ...s.background, motion: m.id },
                       }))
                     }
-                    className={`py-2 px-2 rounded-xl border text-xs font-semibold capitalize flex flex-col items-center gap-1 transition-all ${
-                      scene.background.motion === m
+                    className={`py-2 px-2 rounded-xl border text-xs font-semibold transition-all ${
+                      scene.background.motion === m.id
                         ? "bg-studio-accent/20 border-studio-accent text-white"
                         : "bg-studio-900 border-white/[0.06] text-slate-400 hover:text-slate-200"
                     }`}
                   >
-                    <span>{m.replace("-", " ")}</span>
+                    {m.label}
                   </button>
                 ))}
               </div>
@@ -414,7 +602,6 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
         {/* ================= MASCOT TAB ================= */}
         {activeTab === "mascot" && (
           <div className="space-y-4">
-            {/* Visibility Toggle */}
             <div className="flex items-center justify-between p-3.5 rounded-2xl bg-studio-900/60 border border-white/[0.08]">
               <div className="flex items-center gap-2">
                 {scene.mascot.isVisible ? (
@@ -446,7 +633,6 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
               </button>
             </div>
 
-            {/* Mascot Character Pose Visual Grid */}
             <div>
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
                 Select Mascot Pose
@@ -477,14 +663,15 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                         />
                       </div>
                       <span className="text-xs font-bold text-white">{pose.label}</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5 leading-tight">{pose.desc}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                        {pose.desc}
+                      </span>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* Mascot Positioning */}
             <div>
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
                 Horizontal Placement
@@ -511,7 +698,6 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
               </div>
             </div>
 
-            {/* Entrance Physics Animation */}
             <div>
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
                 Entrance Physics Animation
@@ -540,42 +726,76 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
           </div>
         )}
 
-        {/* ================= OVERLAYS TAB ================= */}
+        {/* ================= OVERLAYS TAB (9 TYPES) ================= */}
         {activeTab === "overlays" && (
           <div className="space-y-4">
-            {/* Add Overlay Buttons */}
             <div>
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
-                Add Graphic Overlay
+                Add Remotion Physics Overlay (9 Types)
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   onClick={() => handleAddOverlay("stat-counter")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
                   <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
                   <span>Stat Counter</span>
                 </button>
                 <button
+                  onClick={() => handleAddOverlay("bar-chart")}
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Bar Chart</span>
+                </button>
+                <button
+                  onClick={() => handleAddOverlay("versus-battle")}
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                >
+                  <Swords className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Versus Battle</span>
+                </button>
+                <button
+                  onClick={() => handleAddOverlay("timeline-milestone")}
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                >
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Milestone</span>
+                </button>
+                <button
+                  onClick={() => handleAddOverlay("quote-card")}
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                >
+                  <Quote className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Quote Card</span>
+                </button>
+                <button
+                  onClick={() => handleAddOverlay("kinetic-title")}
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                >
+                  <Type className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Kinetic Title</span>
+                </button>
+                <button
                   onClick={() => handleAddOverlay("lower-third")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
                   <CreditCard className="w-3.5 h-3.5 text-pink-400" />
                   <span>Lower Third</span>
                 </button>
                 <button
                   onClick={() => handleAddOverlay("progress-ring")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
-                  <PieChart className="w-3.5 h-3.5 text-emerald-400" />
+                  <PieChart className="w-3.5 h-3.5 text-teal-400" />
                   <span>Progress Ring</span>
                 </button>
                 <button
                   onClick={() => handleAddOverlay("code-snippet")}
-                  className="p-2.5 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all col-span-2"
                 >
-                  <Code className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Code Snippet</span>
+                  <Code className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Code Terminal Card</span>
                 </button>
               </div>
             </div>
@@ -609,184 +829,231 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                       </button>
                     </div>
 
-                    {/* Dynamic parameter forms */}
                     {overlay.type === "stat-counter" && (
                       <div className="space-y-2 text-xs">
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Metric Label</label>
+                        <input
+                          type="text"
+                          placeholder="Label"
+                          value={overlay.props.label || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              label: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none text-xs"
+                        />
+                        <div className="grid grid-cols-3 gap-2">
                           <input
                             type="text"
-                            value={overlay.props.label || ""}
+                            placeholder="Prefix"
+                            value={overlay.props.prefix || ""}
                             onChange={(e) =>
                               handleUpdateOverlayProps(overlay.id, {
                                 ...overlay.props,
-                                label: e.target.value,
+                                prefix: e.target.value,
                               })
                             }
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
+                            className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none text-xs"
+                          />
+                          <input
+                            type="number"
+                            value={overlay.props.targetValue ?? 100}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                targetValue: Number(e.target.value) || 0,
+                              })
+                            }
+                            className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none text-xs"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Suffix"
+                            value={overlay.props.suffix || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                suffix: e.target.value,
+                              })
+                            }
+                            className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none text-xs"
                           />
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-[10px] text-slate-400 font-semibold">Prefix</label>
-                            <input
-                              type="text"
-                              value={overlay.props.prefix || ""}
-                              onChange={(e) =>
-                                handleUpdateOverlayProps(overlay.id, {
-                                  ...overlay.props,
-                                  prefix: e.target.value,
-                                })
-                              }
-                              className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 font-semibold">Target</label>
-                            <input
-                              type="number"
-                              value={overlay.props.targetValue ?? 100}
-                              onChange={(e) => {
-                                const val = Number(e.target.value);
-                                handleUpdateOverlayProps(overlay.id, {
-                                  ...overlay.props,
-                                  targetValue: Number.isNaN(val) ? 0 : val,
-                                });
-                              }}
-                              className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs tabular-nums"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 font-semibold">Suffix</label>
-                            <input
-                              type="text"
-                              value={overlay.props.suffix || ""}
-                              onChange={(e) =>
-                                handleUpdateOverlayProps(overlay.id, {
-                                  ...overlay.props,
-                                  suffix: e.target.value,
-                                })
-                              }
-                              className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
-                            />
-                          </div>
+                      </div>
+                    )}
+
+                    {overlay.type === "versus-battle" && (
+                      <div className="space-y-2 text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Left Name"
+                            value={overlay.props.leftName || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                leftName: e.target.value,
+                              })
+                            }
+                            className="bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Left Stat"
+                            value={overlay.props.leftStat || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                leftStat: e.target.value,
+                              })
+                            }
+                            className="bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Right Name"
+                            value={overlay.props.rightName || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                rightName: e.target.value,
+                              })
+                            }
+                            className="bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Right Stat"
+                            value={overlay.props.rightStat || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                rightStat: e.target.value,
+                              })
+                            }
+                            className="bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {overlay.type === "quote-card" && (
+                      <div className="space-y-2 text-xs">
+                        <textarea
+                          rows={2}
+                          value={overlay.props.quote || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              quote: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none resize-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Author / Source"
+                          value={overlay.props.author || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              author: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                        />
+                      </div>
+                    )}
+
+                    {overlay.type === "timeline-milestone" && (
+                      <div className="space-y-2 text-xs">
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Year"
+                            value={overlay.props.year || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                year: e.target.value,
+                              })
+                            }
+                            className="bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Event Title"
+                            value={overlay.props.eventTitle || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                eventTitle: e.target.value,
+                              })
+                            }
+                            className="col-span-2 bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {overlay.type === "kinetic-title" && (
+                      <div className="space-y-2 text-xs">
+                        <input
+                          type="text"
+                          placeholder="Top Tag"
+                          value={overlay.props.topTag || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              topTag: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Headline"
+                          value={overlay.props.headline || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              headline: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                        />
                       </div>
                     )}
 
                     {overlay.type === "lower-third" && (
                       <div className="space-y-2 text-xs">
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Category Tag</label>
-                          <input
-                            type="text"
-                            value={overlay.props.category || ""}
-                            onChange={(e) =>
-                              handleUpdateOverlayProps(overlay.id, {
-                                ...overlay.props,
-                                category: e.target.value,
-                              })
-                            }
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Main Title</label>
-                          <input
-                            type="text"
-                            value={overlay.props.title || ""}
-                            onChange={(e) =>
-                              handleUpdateOverlayProps(overlay.id, {
-                                ...overlay.props,
-                                title: e.target.value,
-                              })
-                            }
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Subtitle Description</label>
-                          <input
-                            type="text"
-                            value={overlay.props.subtitle || ""}
-                            onChange={(e) =>
-                              handleUpdateOverlayProps(overlay.id, {
-                                ...overlay.props,
-                                subtitle: e.target.value,
-                              })
-                            }
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {overlay.type === "progress-ring" && (
-                      <div className="space-y-2 text-xs">
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Label</label>
-                          <input
-                            type="text"
-                            value={overlay.props.label || ""}
-                            onChange={(e) =>
-                              handleUpdateOverlayProps(overlay.id, {
-                                ...overlay.props,
-                                label: e.target.value,
-                              })
-                            }
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Percentage (0-100)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={overlay.props.percentage ?? 80}
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              handleUpdateOverlayProps(overlay.id, {
-                                ...overlay.props,
-                                percentage: Number.isNaN(val) ? 0 : val,
-                              });
-                            }}
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs tabular-nums"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {overlay.type === "code-snippet" && (
-                      <div className="space-y-2 text-xs">
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Filename</label>
-                          <input
-                            type="text"
-                            value={overlay.props.filename || ""}
-                            onChange={(e) =>
-                              handleUpdateOverlayProps(overlay.id, {
-                                ...overlay.props,
-                                filename: e.target.value,
-                              })
-                            }
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-semibold">Code Body</label>
-                          <textarea
-                            rows={3}
-                            value={overlay.props.code || ""}
-                            onChange={(e) =>
-                              handleUpdateOverlayProps(overlay.id, {
-                                ...overlay.props,
-                                code: e.target.value,
-                              })
-                            }
-                            className="w-full bg-studio-950 border border-white/[0.08] focus:border-studio-accent rounded-lg p-2 text-slate-200 outline-none text-xs font-mono resize-none leading-relaxed"
-                          />
-                        </div>
+                        <input
+                          type="text"
+                          placeholder="Title"
+                          value={overlay.props.title || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              title: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Subtitle"
+                          value={overlay.props.subtitle || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              subtitle: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                        />
                       </div>
                     )}
                   </div>

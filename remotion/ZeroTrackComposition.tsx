@@ -2,9 +2,11 @@ import React from "react";
 import { Audio, Series, AbsoluteFill, staticFile } from "remotion";
 import { MasterVideoState } from "@/types/schema";
 import { BackgroundLayer } from "./components/BackgroundLayer";
+import { ThreeDLayer } from "./components/ThreeDLayer";
 import { MascotLayer } from "./components/MascotLayer";
 import { CaptionsLayer } from "./components/CaptionsLayer";
 import { OverlaysLayer } from "./components/OverlaysLayer";
+import { SlideTransitionWrapper } from "./components/SlideTransitionWrapper";
 
 interface ZeroTrackCompositionProps {
   state: MasterVideoState;
@@ -48,7 +50,7 @@ export const ZeroTrackComposition: React.FC<ZeroTrackCompositionProps> = ({ stat
       {bgMusic && (
         <Audio
           src={bgMusic}
-          volume={state.audio.musicVolume ?? 0.2}
+          volume={state.audio.musicVolume ?? 0.18}
           loop
           pauseWhenBuffering={false}
           acceptableTimeShiftInSeconds={2}
@@ -69,32 +71,54 @@ export const ZeroTrackComposition: React.FC<ZeroTrackCompositionProps> = ({ stat
 
       {/* Sequential Scenes strictly governed by Audio Timestamps */}
       <Series>
-        {state.scenes.map((scene) => (
-          <Series.Sequence
-            key={scene.id}
-            durationInFrames={Math.max(1, scene.durationInFrames)}
-          >
-            <AbsoluteFill>
-              {/* Layer 1: Background (FLUX Klein / Stock / Color with Ken Burns) */}
-              <BackgroundLayer
-                background={scene.background}
-                sceneDurationInFrames={scene.durationInFrames}
-              />
+        {state.scenes.map((scene, idx) => {
+          // Default 3D scene if not explicitly set so every slide feels alive
+          const defaultThreeD =
+            scene.threeDScene ??
+            (["cyber-globe", "floating-cubes", "neural-network", "energy-torus", "trophy-arena"][
+              idx % 5
+            ] as any);
+          const defaultTransition =
+            scene.transitionStyle ??
+            (["zoom-punch", "slide-left", "flip-3d", "wipe-up", "fade"][idx % 5] as any);
 
-              {/* Layer 2: Graphic Overlays */}
-              <OverlaysLayer
-                overlays={scene.overlays}
-                mascot={scene.mascot}
-              />
+          return (
+            <Series.Sequence
+              key={scene.id}
+              durationInFrames={Math.max(1, scene.durationInFrames)}
+            >
+              <SlideTransitionWrapper
+                style={defaultTransition}
+                durationInFrames={scene.durationInFrames}
+              >
+                {/* Layer 1: Background (FLUX Klein / Stock / Color with 6 Camera Motions) */}
+                <BackgroundLayer
+                  background={scene.background}
+                  sceneDurationInFrames={scene.durationInFrames}
+                />
 
-              {/* Layer 3: Mascot (Comic-ink Lightbulb Character) */}
-              <MascotLayer mascot={scene.mascot} />
+                {/* Layer 2: Three.js 3D WebGL Animation Layer */}
+                <ThreeDLayer
+                  preset={defaultThreeD}
+                  accentColor={scene.threeDColor || "#6366f1"}
+                  sceneDurationInFrames={scene.durationInFrames}
+                />
 
-              {/* Layer 4: Semantic Word-Level Captions */}
-              <CaptionsLayer scene={scene} />
-            </AbsoluteFill>
-          </Series.Sequence>
-        ))}
+                {/* Layer 3: Remotion Physics Graphic Overlays (9 Types) */}
+                <OverlaysLayer
+                  overlays={scene.overlays}
+                  mascot={scene.mascot}
+                />
+
+                {/* Layer 4: Mascot (Comic-ink Lightbulb Character) */}
+                <MascotLayer mascot={scene.mascot} />
+
+                {/* Layer 5: Semantic Word-Level Captions */}
+                <CaptionsLayer scene={scene} />
+              </SlideTransitionWrapper>
+            </Series.Sequence>
+          );
+        })}
       </Series>
     </AbsoluteFill>
   );

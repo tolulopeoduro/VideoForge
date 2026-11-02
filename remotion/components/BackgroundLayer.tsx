@@ -1,5 +1,5 @@
 import React from "react";
-import { interpolate, useCurrentFrame, useVideoConfig, Img, staticFile } from "remotion";
+import { interpolate, useCurrentFrame, Img, staticFile } from "remotion";
 import { Scene } from "@/types/schema";
 
 interface BackgroundLayerProps {
@@ -8,6 +8,10 @@ interface BackgroundLayerProps {
 }
 
 const resolveImageSrc = (src: string) => {
+  if (!src) return "";
+  if (src.startsWith("/generated/")) {
+    return `/api/media/${src.replace("/generated/", "")}`;
+  }
   if (src.startsWith("/")) return staticFile(src);
   return src;
 };
@@ -17,41 +21,84 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
   sceneDurationInFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const dur = Math.max(1, sceneDurationInFrames);
 
-  // Dynamic Ken Burns calculations based on motion type
+  // Dynamic Ken Burns & 3D Camera Motion calculations
   let transform = "scale(1.0)";
   if (background.motion === "zoom-in") {
-    const scale = interpolate(
-      frame,
-      [0, Math.max(1, sceneDurationInFrames)],
-      [1.0, 1.14],
-      { extrapolateRight: "clamp" }
-    );
+    const scale = interpolate(frame, [0, dur], [1.0, 1.18], {
+      extrapolateRight: "clamp",
+    });
+    transform = `scale(${scale})`;
+  } else if (background.motion === "zoom-out") {
+    const scale = interpolate(frame, [0, dur], [1.18, 1.0], {
+      extrapolateRight: "clamp",
+    });
     transform = `scale(${scale})`;
   } else if (background.motion === "pan-left") {
-    const translateX = interpolate(
-      frame,
-      [0, Math.max(1, sceneDurationInFrames)],
-      [0, -40],
-      { extrapolateRight: "clamp" }
-    );
-    const scale = 1.08;
-    transform = `scale(${scale}) translateX(${translateX}px)`;
+    const translateX = interpolate(frame, [0, dur], [30, -45], {
+      extrapolateRight: "clamp",
+    });
+    transform = `scale(1.12) translateX(${translateX}px)`;
+  } else if (background.motion === "pan-right") {
+    const translateX = interpolate(frame, [0, dur], [-30, 45], {
+      extrapolateRight: "clamp",
+    });
+    transform = `scale(1.12) translateX(${translateX}px)`;
+  } else if (background.motion === "tilt-3d") {
+    const rotX = interpolate(frame, [0, dur], [4, -4], {
+      extrapolateRight: "clamp",
+    });
+    const rotY = interpolate(frame, [0, dur], [-5, 5], {
+      extrapolateRight: "clamp",
+    });
+    const scale = interpolate(frame, [0, dur], [1.06, 1.15], {
+      extrapolateRight: "clamp",
+    });
+    transform = `perspective(1200px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${scale})`;
   }
 
-  // Render background according to type
+  // Animated light orb coordinates for rich studio atmosphere
+  const orb1X = interpolate(frame, [0, dur], [25, 75], { extrapolateRight: "clamp" });
+  const orb1Y = interpolate(frame, [0, dur], [20, 45], { extrapolateRight: "clamp" });
+  const orb2X = interpolate(frame, [0, dur], [80, 30], { extrapolateRight: "clamp" });
+
   if (background.type === "color") {
     return (
       <div
         style={{
           position: "absolute",
           inset: 0,
+          overflow: "hidden",
           backgroundColor: background.src || "#0f172a",
-          backgroundImage:
-            "radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 60%), radial-gradient(circle at 80% 80%, rgba(245, 158, 11, 0.1) 0%, transparent 50%)",
         }}
-      />
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: "-10%",
+            transform,
+            transformOrigin: "center center",
+            backgroundImage: `
+              radial-gradient(circle at ${orb1X}% ${orb1Y}%, rgba(99, 102, 241, 0.28) 0%, transparent 55%),
+              radial-gradient(circle at ${orb2X}% 75%, rgba(245, 158, 11, 0.16) 0%, transparent 50%),
+              linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+            `,
+            backgroundSize: "100% 100%, 100% 100%, 64px 64px, 64px 64px",
+          }}
+        />
+        {/* Studio Vignette */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(circle at 50% 45%, transparent 35%, rgba(5, 8, 17, 0.72) 100%)",
+            pointerEvents: "none",
+          }}
+        />
+      </div>
     );
   }
 
@@ -71,7 +118,6 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
           height: "100%",
           transform,
           transformOrigin: "center center",
-          transition: "transform 0.05s linear",
         }}
       >
         {background.src.startsWith("<svg") ? (
@@ -101,13 +147,13 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
         )}
       </div>
 
-      {/* Cinematic vignette & subtle contrast overlay for text readability */}
+      {/* Cinematic vignette & contrast gradient for foreground readability */}
       <div
         style={{
           position: "absolute",
           inset: 0,
           background:
-            "linear-gradient(180deg, rgba(15, 23, 42, 0.45) 0%, rgba(15, 23, 0.2) 50%, rgba(15, 23, 42, 0.8) 100%)",
+            "linear-gradient(180deg, rgba(9, 13, 22, 0.45) 0%, rgba(9, 13, 22, 0.15) 45%, rgba(9, 13, 22, 0.85) 100%)",
           pointerEvents: "none",
         }}
       />

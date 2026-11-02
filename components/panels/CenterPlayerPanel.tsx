@@ -1,23 +1,15 @@
+"use client";
+
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import dynamic from "next/dynamic";
-import type { PlayerRef } from "@remotion/player";
+import { Player, type PlayerRef } from "@remotion/player";
 import { MasterVideoState } from "@/types/schema";
 import { ZeroTrackComposition } from "@/remotion/ZeroTrackComposition";
-
-const Player = dynamic(
-  () => import("@remotion/player").then((mod) => mod.Player),
-  { ssr: false }
-);
-
 import {
   Play,
   Pause,
   RotateCcw,
   Volume2,
   VolumeX,
-  Maximize2,
-  Tv2,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   SkipBack,
@@ -25,9 +17,8 @@ import {
   Repeat,
   Eye,
   EyeOff,
-  Layers,
-  ZoomIn,
-  AlertCircle,
+  Box,
+  Sparkles,
 } from "lucide-react";
 
 interface CenterPlayerPanelProps {
@@ -41,6 +32,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
   selectedSceneId,
   onSelectScene,
 }) => {
+  const [isMounted, setIsMounted] = useState(false);
   const playerRef = useRef<PlayerRef | null>(null);
   const [player, setPlayer] = useState<PlayerRef | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -49,6 +41,10 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
   const [isLooping, setIsLooping] = useState(true);
   const [showSafeMargins, setShowSafeMargins] = useState(false);
   const [audioPolicyBlocked, setAudioPolicyBlocked] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const calculatedTotalFrames = state.scenes.reduce(
     (acc, s) => acc + (s.durationInFrames || 30),
@@ -66,7 +62,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
     setPlayer(node);
   }, []);
 
-  // Synchronize Player frame and playback events whenever dynamic player instance mounts
+  // Attach Remotion Player event listeners directly to the real PlayerRef instance
   useEffect(() => {
     if (!player) return;
 
@@ -98,7 +94,6 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
     player.addEventListener("ended", onEnded);
     player.addEventListener("error", onError);
 
-    // Initial sync
     try {
       setIsPlaying(player.isPlaying());
       setCurrentFrame(player.getCurrentFrame());
@@ -113,7 +108,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
     };
   }, [player, isLooping]);
 
-  // High-frequency 60fps rAF loop to guarantee buttery-smooth playhead updates
+  // 60fps rAF sync loop to guarantee buttery-smooth playhead and timecode updates
   useEffect(() => {
     if (!isPlaying || !player) return;
 
@@ -150,18 +145,17 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
           activePlayer.pause();
           setIsPlaying(false);
         } else {
-          // Wrap around if at or past the last frame
           if (activePlayer.getCurrentFrame() >= totalFrames - 1) {
             activePlayer.seekTo(0);
             setCurrentFrame(0);
           }
-          activePlayer.play();
+          // Pass synthetic mouse event if available so Remotion warms up audio context
+          activePlayer.play(e as any);
           setIsPlaying(true);
           setAudioPolicyBlocked(false);
         }
       } catch (err: any) {
-        console.warn("Player play() exception, handling autoplay policy:", err);
-        // Autoplay policy fallback: mute and play
+        console.warn("Player play() exception, falling back to muted playback:", err);
         try {
           activePlayer.mute();
           setIsMuted(true);
@@ -195,14 +189,17 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
     [currentFrame, handleSeek]
   );
 
-  const handleRestart = useCallback(() => {
-    const activePlayer = playerRef.current || player;
-    if (!activePlayer) return;
-    activePlayer.seekTo(0);
-    setCurrentFrame(0);
-    activePlayer.play();
-    setIsPlaying(true);
-  }, [player]);
+  const handleRestart = useCallback(
+    (e?: React.MouseEvent) => {
+      const activePlayer = playerRef.current || player;
+      if (!activePlayer) return;
+      activePlayer.seekTo(0);
+      setCurrentFrame(0);
+      activePlayer.play(e as any);
+      setIsPlaying(true);
+    },
+    [player]
+  );
 
   const toggleMute = useCallback(() => {
     const activePlayer = playerRef.current || player;
@@ -217,7 +214,6 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
     }
   }, [isMuted, player]);
 
-  // Jump to next or previous scene start frame
   const jumpScene = useCallback(
     (dir: -1 | 1) => {
       const currIdx = state.scenes.findIndex((s) => s.id === selectedSceneId);
@@ -238,6 +234,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
       if (
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
         target.isContentEditable
       ) {
         return;
@@ -276,7 +273,6 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
       .padStart(2, "0")}:${frames.toString().padStart(2, "0")}`;
   };
 
-  // Find currently active scene for transport highlight
   const activeSceneIdx = state.scenes.findIndex((s) => {
     return (
       currentFrame >= s.startFrame &&
@@ -299,7 +295,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
               }`}
             />
             <span className="font-bold text-white text-xs tracking-tight">
-              {isPlaying ? "Playing Video" : "Studio Canvas"}
+              {isPlaying ? "Playing Live" : "Studio Canvas"}
             </span>
           </div>
 
@@ -312,8 +308,9 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
 
           <span className="text-white/20 hidden sm:inline">•</span>
 
-          <span className="text-emerald-400 font-semibold text-[11px] hidden sm:inline">
-            30 FPS Accelerated
+          <span className="text-cyan-400 font-semibold text-[11px] hidden sm:inline flex items-center gap-1">
+            <Box className="w-3 h-3 inline mr-1" />
+            Three.js WebGL + Remotion 4.0
           </span>
         </div>
 
@@ -327,6 +324,13 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
               <VolumeX className="w-3.5 h-3.5 text-amber-400" />
               <span>Click to Unmute Audio</span>
             </button>
+          )}
+
+          {currentScene?.threeDScene && currentScene.threeDScene !== "none" && (
+            <span className="bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold uppercase hidden lg:inline-flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              3D: {currentScene.threeDScene}
+            </span>
           )}
 
           {/* Safe Margins Guide (TikTok / Reels safe margins) */}
@@ -368,23 +372,30 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
               : "w-[94%] max-w-[960px] aspect-[16/9]"
           }`}
         >
-          <Player
-            ref={setPlayerRef}
-            component={ZeroTrackComposition as any}
-            inputProps={{ state }}
-            durationInFrames={totalFrames}
-            compositionWidth={state.metadata.width}
-            compositionHeight={state.metadata.height}
-            fps={fps}
-            style={{
-              width: "100%",
-              height: "100%",
-            }}
-            controls={false}
-            clickToPlay={false}
-            loop={isLooping}
-            autoPlay={false}
-          />
+          {isMounted ? (
+            <Player
+              ref={setPlayerRef}
+              component={ZeroTrackComposition as any}
+              inputProps={{ state }}
+              durationInFrames={totalFrames}
+              compositionWidth={state.metadata.width}
+              compositionHeight={state.metadata.height}
+              fps={fps}
+              style={{
+                width: "100%",
+                height: "100%",
+              }}
+              controls={false}
+              clickToPlay={false}
+              spaceKeyToPlayOrPause={false}
+              loop={isLooping}
+              autoPlay={false}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-mono">
+              Initializing Remotion + WebGL Engine...
+            </div>
+          )}
 
           {/* Master Canvas Click-to-Play Overlay */}
           <div
@@ -393,7 +404,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
           >
             {/* When Paused: Prominent Studio Glassmorphic Play Badge */}
             {!isPlaying && (
-              <div className="w-16 h-16 rounded-3xl bg-studio-accent/90 hover:bg-studio-accent hover:scale-110 active:scale-95 backdrop-blur-xl border border-white/30 flex items-center justify-center text-white shadow-2xl shadow-indigo-600/50 transition-all duration-150 animate-in fade-in zoom-in-90">
+              <div className="w-16 h-16 rounded-3xl bg-studio-accent/90 hover:bg-studio-accent hover:scale-110 active:scale-95 backdrop-blur-xl border border-white/30 flex items-center justify-center text-white shadow-2xl shadow-indigo-600/50 transition-all duration-150">
                 <Play className="w-7 h-7 fill-white translate-x-0.5" />
               </div>
             )}
@@ -438,7 +449,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
                     width: `${widthPct}%`,
                     height: "100%",
                   }}
-                  className={`border-r border-studio-950 flex items-center justify-between px-2 transition-all ${
+                  className={`border-r border-studio-950 flex items-center justify-between px-2 transition-all z-20 hover:brightness-125 ${
                     isActiveScene
                       ? "bg-studio-accent/40"
                       : isSelected
@@ -469,13 +480,13 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
               max={totalFrames - 1}
               value={currentFrame}
               onChange={(e) => handleSeek(Number(e.target.value))}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-30"
             />
 
             {/* Playhead Cursor Needle */}
             <div
               style={{ left: `${(currentFrame / totalFrames) * 100}%` }}
-              className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_12px_#ffffff] pointer-events-none -ml-0.5 z-10"
+              className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_12px_#ffffff] pointer-events-none -ml-0.5 z-40"
             />
           </div>
 

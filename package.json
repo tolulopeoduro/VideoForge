@@ -13,13 +13,15 @@
     "@remotion/bundler": "^4.0.539",
     "@remotion/player": "4.0.539",
     "@remotion/renderer": "4.0.539",
+    "@types/three": "^0.187.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "remotion": "4.0.539",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
