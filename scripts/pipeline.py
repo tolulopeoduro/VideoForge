@@ -23,6 +23,96 @@ import numpy as np
 
 FPS = 30
 SAMPLE_RATE = 24000  # 24kHz standard for Kokoro-82M
+SAMPLES_PER_FRAME = SAMPLE_RATE // FPS  # Exactly 800 samples per video frame at 30fps
+
+
+def align_whisper_to_script_words(script_text, whisper_words, scene_dur_sec, duration_in_frames):
+    """
+    Maps Faster-Whisper acoustic word timestamps onto the exact tokens of script_text.
+    Handles compound words (e.g. 'ZeroTrack' split by Whisper into 'Zero' + 'Track'),
+    applies a 1-frame perceptual attack lead-in, and outputs scene-relative frames (0..duration_in_frames).
+    """
+    script_tokens = re.findall(r"\S+", script_text.strip())
+    if not script_tokens:
+        return []
+
+    def norm(s):
+        return re.sub(r"[^a-z0-9]", "", s.lower())
+
+    if not whisper_words:
+        # Syllable/character + punctuation weighted cadence fallback
+        weights = []
+        for tok in script_tokens:
+            clean_len = max(1, len(norm(tok)))
+            punct_bonus = 2.8 if tok.endswith((".", "!", "?")) else (1.5 if tok.endswith((",", ";", ":", "—")) else 0.0)
+            weights.append(clean_len + punct_bonus)
+        total_w = sum(weights) or 1.0
+        usable_sec = max(0.5, scene_dur_sec - 0.12)
+        cursor_sec = 0.04
+        result = []
+        for tok, w in zip(script_tokens, weights):
+            dur_sec = usable_sec * (w / total_w)
+            s_frame = max(0, round(cursor_sec * FPS))
+            e_frame = min(duration_in_frames, max(s_frame + 2, round((cursor_sec + dur_sec) * FPS)))
+            result.append({"text": tok, "startFrame": s_frame, "endFrame": e_frame})
+            cursor_sec += dur_sec
+        return result
+
+    # Match script_tokens to whisper_words using normalized character consumption
+    n_whisper = len(whisper_words)
+    w_idx = 0
+    aligned = []
+
+    for s_idx, s_tok in enumerate(script_tokens):
+        s_norm = norm(s_tok)
+        if w_idx >= n_whisper:
+            # Extrapolate remaining words at tail
+            prev_end = aligned[-1]["endFrame"] if aligned else 0
+            s_frame = min(duration_in_frames - 2, prev_end)
+            e_frame = min(duration_in_frames, s_frame + 6)
+            aligned.append({"text": s_tok, "startFrame": s_frame, "endFrame": e_frame})
+            continue
+
+        start_sec = whisper_words[w_idx]["start"]
+        end_sec = whisper_words[w_idx]["end"]
+        consumed_chars = len( norm(whisper_words[w_idx]["word"]) )
+        w_idx += 1
+
+        # If Whisper split a compound script word (e.g. "ZeroTrack" -> "Zero" + "Track")
+        # consume subsequent Whisper tokens until character length is covered
+        while (
+            w_idx < n_whisper
+            and consumed_chars < len(s_norm)
+            and (s_idx + 1 >= len(script_tokens) or norm(whisper_words[w_idx]["word"]) != norm(script_tokens[s_idx + 1]))
+        ):
+            end_sec = whisper_words[w_idx]["end"]
+            consumed_chars += len(norm(whisper_words[w_idx]["word"]))
+            w_idx += 1
+
+        # Convert to scene-relative frames with 1-frame (-33ms) perceptual onset lead-in
+        s_frame = max(0, round(start_sec * FPS) - 1)
+        e_frame = min(duration_in_frames, max(s_frame + 2, round(end_sec * FPS)))
+        aligned.append({
+            "text": s_tok,
+            "startFrame": s_frame,
+            "endFrame": e_frame,
+        })
+
+    # Smooth micro-gaps between connected words so active highlight never drops out mid-phrase
+    for i in range(len(aligned) - 1):
+        curr_tok = aligned[i]
+        next_tok = aligned[i + 1]
+        if next_tok["startFrame"] < curr_tok["startFrame"] + 1:
+            next_tok["startFrame"] = min(duration_in_frames - 2, curr_tok["startFrame"] + 2)
+        if curr_tok["endFrame"] > next_tok["startFrame"]:
+            curr_tok["endFrame"] = next_tok["startFrame"]
+        else:
+            gap = next_tok["startFrame"] - curr_tok["endFrame"]
+            has_pause_punct = curr_tok["text"].endswith((".", "!", "?", ",", ";", ":", "—"))
+            if gap <= 4 and not has_pause_punct:
+                curr_tok["endFrame"] = next_tok["startFrame"]
+
+    return aligned
 
 def emit(data):
     """Flushes a JSON line event to stdout for Node.js IPC."""
@@ -71,7 +161,7 @@ def synthesize_kokoro_neural(scenes, output_path):
 
     all_audio_chunks = []
     updated_scenes = []
-    current_time_sec = 0.0
+    cumulative_frames = 0
     total_scenes = len(scenes)
 
     for idx, scene in enumerate(scenes):
@@ -83,8 +173,7 @@ def synthesize_kokoro_neural(scenes, output_path):
             f"Synthesizing Kokoro voice for Scene {idx + 1}/{total_scenes}..."
         )
 
-        scene_start_sec = current_time_sec
-        scene_start_frame = round(scene_start_sec * FPS)
+        scene_start_frame = cumulative_frames
         scene_chunks = []
         for _, _, chunk in pipeline(text, voice="af_heart", speed=1.12):
             arr = chunk.numpy() if hasattr(chunk, "numpy") else np.array(chunk)
@@ -95,50 +184,62 @@ def synthesize_kokoro_neural(scenes, output_path):
         else:
             scene_audio = np.concatenate(scene_chunks)
 
-        scene_dur_sec = len(scene_audio) / float(SAMPLE_RATE)
-        all_audio_chunks.append(scene_audio)
+        # Trim excessive trailing silence from Kokoro (> 0.14s) and add a crisp 0.08s inter-scene breath
+        abs_audio = np.abs(scene_audio)
+        non_silent = np.where(abs_audio > 0.008)[0]
+        if len(non_silent) > 0:
+            last_voice_sample = min(len(scene_audio), int(non_silent[-1]) + int(0.10 * SAMPLE_RATE))
+            scene_audio = scene_audio[:last_voice_sample]
 
-        # Word-level timestamp alignment with Faster-Whisper
-        scene_word_tokens = []
+        raw_dur_sec = len(scene_audio) / float(SAMPLE_RATE)
+        target_total_samples = len(scene_audio) + int(0.08 * SAMPLE_RATE)
+
+        # Lock scene duration to an exact integer number of video frames (800 samples per frame at 30fps)
+        duration_in_frames = max(30, int(math.ceil(target_total_samples / float(SAMPLES_PER_FRAME))))
+        exact_scene_samples = duration_in_frames * SAMPLES_PER_FRAME
+        pad_samples_count = max(0, exact_scene_samples - len(scene_audio))
+        padded_scene_audio = np.concatenate([
+            scene_audio,
+            np.zeros(pad_samples_count, dtype=np.float32)
+        ])
+        all_audio_chunks.append(padded_scene_audio)
+
+        # Word-level timestamp alignment with Faster-Whisper mapped onto exact script words
+        # CRITICAL: Faster-Whisper expects 16,000 Hz audio when passed an in-memory numpy array!
+        # Resample 24,000 Hz Kokoro audio -> 16,000 Hz so Whisper timestamps are 1:1 true seconds.
+        whisper_words = []
         try:
-            segments, _ = whisper_model.transcribe(scene_audio, word_timestamps=True)
+            whisper_sr = 16000
+            if len(scene_audio) > 0:
+                num_16k = int(round(len(scene_audio) * whisper_sr / float(SAMPLE_RATE)))
+                x_old = np.linspace(0.0, 1.0, len(scene_audio), endpoint=False)
+                x_new = np.linspace(0.0, 1.0, num_16k, endpoint=False)
+                scene_audio_16k = np.interp(x_new, x_old, scene_audio).astype(np.float32)
+            else:
+                scene_audio_16k = scene_audio
+
+            segments, _ = whisper_model.transcribe(scene_audio_16k, word_timestamps=True)
             for seg in segments:
-                for w in seg.words:
-                    clean_w = w.word.strip()
-                    if not clean_w:
-                        continue
-                    w_start_frame = max(scene_start_frame, round((scene_start_sec + w.start) * FPS))
-                    w_end_frame = max(w_start_frame + 2, round((scene_start_sec + w.end) * FPS))
-                    scene_word_tokens.append({
-                        "text": clean_w,
-                        "startFrame": w_start_frame,
-                        "endFrame": w_end_frame,
-                    })
-        except Exception as w_err:
-            # Fallback to proportional word interval calculation
-            words = re.findall(r"\S+", text)
-            total_chars = sum(len(re.sub(r"[^\w]", "", w)) or 1 for w in words)
-            w_cursor = scene_start_sec
-            for w in words:
-                char_len = max(len(re.sub(r"[^\w]", "", w)), 1)
-                w_dur = max(0.18, scene_dur_sec * (char_len / float(total_chars)))
-                w_start = round(w_cursor * FPS)
-                w_end = max(w_start + 2, round((w_cursor + w_dur) * FPS))
-                scene_word_tokens.append({"text": w, "startFrame": w_start, "endFrame": w_end})
-                w_cursor += w_dur
+                if seg.words:
+                    for w in seg.words:
+                        clean_w = w.word.strip()
+                        if clean_w:
+                            whisper_words.append({
+                                "word": clean_w,
+                                "start": float(w.start),
+                                "end": float(w.end),
+                            })
+        except Exception:
+            whisper_words = []
 
-        current_time_sec += scene_dur_sec
+        scene_word_tokens = align_whisper_to_script_words(
+            text,
+            whisper_words,
+            raw_dur_sec,
+            duration_in_frames
+        )
 
-        # 0.08s smooth inter-scene natural breath transition
-        pad_dur = 0.08
-        pad_samples = np.zeros(int(pad_dur * SAMPLE_RATE), dtype=np.float32)
-        all_audio_chunks.append(pad_samples)
-        current_time_sec += pad_dur
-
-        scene_end_sec = current_time_sec
-        scene_start_frame = round(scene_start_sec * FPS)
-        scene_end_frame = round(scene_end_sec * FPS)
-        duration_in_frames = max(30, scene_end_frame - scene_start_frame)
+        cumulative_frames += duration_in_frames
 
         updated_scene = dict(scene)
         updated_scene["startFrame"] = scene_start_frame
@@ -150,7 +251,7 @@ def synthesize_kokoro_neural(scenes, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     sf.write(output_path, master_audio, SAMPLE_RATE, subtype="PCM_16")
 
-    total_frames = max(30, round(current_time_sec * FPS))
+    total_frames = max(30, cumulative_frames)
     emit_progress("packaging_assets", 95, "Locking universal state frame timing...")
     time.sleep(0.1)
 
@@ -166,16 +267,14 @@ def synthesize_macos_say(scenes, output_path):
 
     all_audio_bytes = bytearray()
     updated_scenes = []
-    current_time_sec = 0.0
+    cumulative_frames = 0
     total_scenes = len(scenes)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         for idx, scene in enumerate(scenes):
-            scene_id = scene.get("id", f"scene_{idx}")
             text = scene.get("scriptText", "").strip()
-            words = re.findall(r"\S+", text) if text else ["..."]
 
-            scene_start_sec = current_time_sec
+            scene_start_frame = cumulative_frames
             progress_pct = 20 + int(45 * (idx + 1) / total_scenes)
             emit_progress(
                 "synthesizing_speech",
@@ -194,43 +293,27 @@ def synthesize_macos_say(scenes, output_path):
             )
 
             with wave.open(wav_file, "rb") as wf:
-                scene_frames = wf.getnframes()
+                scene_samples = wf.getnframes()
                 scene_rate = wf.getframerate()
-                scene_dur_sec = scene_frames / float(scene_rate)
-                raw_bytes = wf.readframes(scene_frames)
-                all_audio_bytes.extend(raw_bytes)
+                scene_dur_sec = scene_samples / float(scene_rate)
+                raw_bytes = wf.readframes(scene_samples)
 
-            total_chars = sum(len(re.sub(r"[^\w]", "", w)) or 1 for w in words)
-            scene_word_tokens = []
-            word_cursor_sec = scene_start_sec
+            target_total_samples = scene_samples + int(0.08 * SAMPLE_RATE)
+            duration_in_frames = max(30, int(math.ceil(target_total_samples / float(SAMPLES_PER_FRAME))))
+            exact_scene_samples = duration_in_frames * SAMPLES_PER_FRAME
+            pad_samples = max(0, exact_scene_samples - scene_samples)
 
-            for w_idx, word in enumerate(words):
-                clean_w = re.sub(r"[^\w]", "", word)
-                char_len = max(len(clean_w), 1)
-                w_fraction = char_len / float(total_chars)
-                w_dur = max(0.18, scene_dur_sec * w_fraction)
+            all_audio_bytes.extend(raw_bytes)
+            all_audio_bytes.extend(b"\x00\x00" * pad_samples)
 
-                w_start_frame = round(word_cursor_sec * FPS)
-                w_end_frame = max(w_start_frame + 2, round((word_cursor_sec + w_dur) * FPS))
+            scene_word_tokens = align_whisper_to_script_words(
+                text,
+                [],
+                scene_dur_sec,
+                duration_in_frames
+            )
 
-                scene_word_tokens.append({
-                    "text": word,
-                    "startFrame": w_start_frame,
-                    "endFrame": w_end_frame,
-                })
-                word_cursor_sec += w_dur
-
-            current_time_sec += scene_dur_sec
-
-            pad_dur = 0.15
-            pad_frames = int(pad_dur * SAMPLE_RATE)
-            all_audio_bytes.extend(b"\x00\x00" * pad_frames)
-            current_time_sec += pad_dur
-
-            scene_end_sec = current_time_sec
-            scene_start_frame = round(scene_start_sec * FPS)
-            scene_end_frame = round(scene_end_sec * FPS)
-            duration_in_frames = max(30, scene_end_frame - scene_start_frame)
+            cumulative_frames += duration_in_frames
 
             updated_scene = dict(scene)
             updated_scene["startFrame"] = scene_start_frame
@@ -248,7 +331,7 @@ def synthesize_macos_say(scenes, output_path):
         wf.setframerate(SAMPLE_RATE)
         wf.writeframes(all_audio_bytes)
 
-    total_frames = max(30, round(current_time_sec * FPS))
+    total_frames = max(30, cumulative_frames)
     emit_progress("packaging_assets", 95, "Locking universal state frame timing...")
     time.sleep(0.1)
 

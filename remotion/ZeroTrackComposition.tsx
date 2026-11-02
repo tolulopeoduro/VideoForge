@@ -113,8 +113,11 @@ export const ZeroTrackComposition: React.FC<ZeroTrackCompositionProps> = ({ stat
                 {/* Layer 4: Mascot (Comic-ink Lightbulb Character) */}
                 <MascotLayer mascot={scene.mascot} />
 
-                {/* Layer 5: Semantic Word-Level Captions */}
-                <CaptionsLayer scene={scene} />
+                {/* Layer 5: Semantic Word-Level Captions (Veed.io Customizable Engine) */}
+                <CaptionsLayer
+                  scene={scene}
+                  captionConfig={state.captionConfig}
+                />
               </SlideTransitionWrapper>
             </Series.Sequence>
           );

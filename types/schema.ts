@@ -21,6 +21,66 @@ export type CaptionVisualStyle =
   | "cinema-minimal"
   | "neon-cyber";
 
+export type CaptionPresetId =
+  | "veed-box"
+  | "hormozi"
+  | "karaoke"
+  | "neon-glow"
+  | "word-slam"
+  | "editorial";
+
+export type CaptionFontFamily =
+  | "Inter"
+  | "Montserrat"
+  | "Space Grotesk"
+  | "Playfair Display"
+  | "JetBrains Mono"
+  | "Bangers";
+
+export type CaptionHighlightStyle =
+  | "box-highlight"
+  | "pop-scale"
+  | "karaoke-fill"
+  | "underline-slide"
+  | "neon-pulse";
+
+export type CaptionBackgroundStyle =
+  | "glass-pill"
+  | "solid-dark"
+  | "none";
+
+export interface CaptionStyleConfig {
+  preset: CaptionPresetId;
+  fontFamily: CaptionFontFamily;
+  fontSize: number;
+  highlightStyle: CaptionHighlightStyle;
+  highlightColor: string;
+  textColor: string;
+  upcomingOpacity: number;
+  backgroundStyle: CaptionBackgroundStyle;
+  textTransform: "uppercase" | "capitalize" | "none";
+  wordsPerChunk: number;
+  verticalPosition: "bottom" | "middle" | "top";
+  syncOffsetFrames: number;
+  strokeWidth: number;
+}
+
+export const DEFAULT_CAPTION_CONFIG: CaptionStyleConfig = {
+  preset: "veed-box",
+  fontFamily: "Montserrat",
+  fontSize: 42,
+  highlightStyle: "box-highlight",
+  highlightColor: "#6366f1",
+  textColor: "#ffffff",
+  upcomingOpacity: 0.5,
+  backgroundStyle: "glass-pill",
+  textTransform: "uppercase",
+  wordsPerChunk: 4,
+  verticalPosition: "bottom",
+  syncOffsetFrames: 0,
+  strokeWidth: 0,
+};
+
 export type CameraMotionType =
   | "zoom-in"
   | "zoom-out"
@@ -54,6 +114,7 @@ export interface MasterVideoState {
     backgroundMusicUrl?: string;
     musicVolume: number; // For auto-ducking (e.g., 0.2)
   };
+  captionConfig?: CaptionStyleConfig;
   scenes: Scene[];
 }
 
