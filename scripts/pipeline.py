@@ -84,8 +84,9 @@ def synthesize_kokoro_neural(scenes, output_path):
         )
 
         scene_start_sec = current_time_sec
+        scene_start_frame = round(scene_start_sec * FPS)
         scene_chunks = []
-        for _, _, chunk in pipeline(text, voice="af_heart", speed=1.0):
+        for _, _, chunk in pipeline(text, voice="af_heart", speed=1.12):
             arr = chunk.numpy() if hasattr(chunk, "numpy") else np.array(chunk)
             scene_chunks.append(arr)
 
@@ -106,7 +107,7 @@ def synthesize_kokoro_neural(scenes, output_path):
                     clean_w = w.word.strip()
                     if not clean_w:
                         continue
-                    w_start_frame = round((scene_start_sec + w.start) * FPS)
+                    w_start_frame = max(scene_start_frame, round((scene_start_sec + w.start) * FPS))
                     w_end_frame = max(w_start_frame + 2, round((scene_start_sec + w.end) * FPS))
                     scene_word_tokens.append({
                         "text": clean_w,
@@ -128,8 +129,8 @@ def synthesize_kokoro_neural(scenes, output_path):
 
         current_time_sec += scene_dur_sec
 
-        # 0.15s natural inter-scene breath padding
-        pad_dur = 0.15
+        # 0.08s smooth inter-scene natural breath transition
+        pad_dur = 0.08
         pad_samples = np.zeros(int(pad_dur * SAMPLE_RATE), dtype=np.float32)
         all_audio_chunks.append(pad_samples)
         current_time_sec += pad_dur
@@ -186,7 +187,7 @@ def synthesize_macos_say(scenes, output_path):
             wav_file = os.path.join(tmp_dir, f"scene_{idx}.wav")
 
             clean_text = re.sub(r'["`$]', "", text) if text else "Scene pause."
-            subprocess.run(["say", "-o", aiff_file, clean_text], check=True)
+            subprocess.run(["say", "-r", "195", "-o", aiff_file, clean_text], check=True)
             subprocess.run(
                 ["afconvert", "-f", "WAVE", "-d", "LEI16@24000", aiff_file, wav_file],
                 check=True

@@ -1,6 +1,6 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
-import { Scene } from "@/types/schema";
+import { Scene, WordToken } from "@/types/schema";
 
 interface CaptionsLayerProps {
   scene: Scene;
@@ -11,76 +11,112 @@ export const CaptionsLayer: React.FC<CaptionsLayerProps> = ({ scene }) => {
   const { width, height } = useVideoConfig();
 
   const isPortrait = height > width;
+  const duration = Math.max(1, scene.durationInFrames);
 
-  if (!scene.wordTokens || scene.wordTokens.length === 0) {
-    // If no word tokens yet, show clean script text
-    return (
-      <div
-        style={{
-          position: "absolute",
-          bottom: isPortrait ? 260 : 70,
-          left: "50%",
-          transform: "translateX(-50%)",
-          maxWidth: isPortrait ? "86%" : "72%",
-          textAlign: "center",
-          zIndex: 30,
-          background: "rgba(10, 15, 29, 0.78)",
-          backdropFilter: "blur(14px)",
-          padding: isPortrait ? "18px 28px" : "14px 24px",
-          borderRadius: 22,
-          border: "1px solid rgba(255, 255, 255, 0.12)",
-          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.6)",
-        }}
-      >
-        <span
-          style={{
-            fontSize: isPortrait ? 34 : 26,
-            fontWeight: 700,
-            color: "#ffffff",
-            textShadow: "0 2px 10px rgba(0, 0, 0, 0.8)",
-            lineHeight: 1.35,
-          }}
-        >
-          {scene.scriptText}
-        </span>
-      </div>
-    );
+  // 1. Build a guaranteed normalized array of word tokens
+  let tokens: Array<{ text: string; start: number; end: number }> = [];
+
+  if (scene.wordTokens && scene.wordTokens.length > 0) {
+    tokens = scene.wordTokens.map((t) => {
+      let s = t.startFrame;
+      let e = t.endFrame;
+
+      // Handle global timestamps by converting to scene-relative
+      if (scene.startFrame > 0 && s >= scene.startFrame) {
+        s -= scene.startFrame;
+        e -= scene.startFrame;
+      } else if (scene.startFrame > 0 && s > scene.startFrame - 15) {
+        // Minor Whisper start jitter at scene boundary
+        s = 0;
+        e = Math.max(2, e - scene.startFrame);
+      }
+
+      const clampedStart = Math.max(0, Math.min(duration - 2, s));
+      const clampedEnd = Math.max(clampedStart + 2, Math.min(duration, e));
+      return {
+        text: t.text,
+        start: clampedStart,
+        end: clampedEnd,
+      };
+    });
+  } else {
+    // Fallback: distribute scriptText words proportionally across the scene duration
+    const words = scene.scriptText.trim().split(/\s+/).filter(Boolean);
+    if (words.length > 0) {
+      const framesPerWord = duration / words.length;
+      tokens = words.map((w, i) => {
+        const s = Math.round(i * framesPerWord);
+        const e = Math.min(duration, Math.round((i + 1) * framesPerWord));
+        return {
+          text: w,
+          start: s,
+          end: Math.max(s + 2, e),
+        };
+      });
+    }
   }
 
-  // Find currently active word or last spoken word for pagination
-  const tokens = scene.wordTokens;
-  let activeIdx = tokens.findIndex((t) => {
-    const relStart = t.startFrame >= scene.startFrame ? t.startFrame - scene.startFrame : t.startFrame;
-    const relEnd = t.endFrame >= scene.startFrame ? t.endFrame - scene.startFrame : t.endFrame;
-    return frame >= relStart && frame <= relEnd;
-  });
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  // 2. Identify the active word at current frame
+  let activeIdx = tokens.findIndex((t) => frame >= t.start && frame <= t.end);
 
   if (activeIdx === -1) {
+    // If between words (short pause or leading/trailing gap), hold on the closest word
     for (let i = tokens.length - 1; i >= 0; i--) {
-      const relEnd = tokens[i].endFrame >= scene.startFrame ? tokens[i].endFrame - scene.startFrame : tokens[i].endFrame;
-      if (frame >= relEnd) {
+      if (frame >= tokens[i].end) {
         activeIdx = i;
         break;
       }
     }
+    if (activeIdx === -1 && frame < tokens[0].start) {
+      activeIdx = 0;
+    }
   }
 
   const safeIdx = Math.max(0, activeIdx);
-  const CHUNK_SIZE = isPortrait ? 6 : 8;
+
+  // 3. Compact chunking: 4 words in vertical portrait (TikTok/Reels), 6 in landscape
+  const CHUNK_SIZE = isPortrait ? 4 : 6;
   const chunkStart = Math.floor(safeIdx / CHUNK_SIZE) * CHUNK_SIZE;
-  const visibleTokens = tokens.length > CHUNK_SIZE ? tokens.slice(chunkStart, chunkStart + CHUNK_SIZE) : tokens;
+  const visibleTokens = tokens.slice(chunkStart, chunkStart + CHUNK_SIZE);
+
+  // 4. Mascot-aware intelligent placement so subtitles NEVER block mascot face/torso
+  const mascot = scene.mascot;
+  let captionBottom = isPortrait ? 360 : 80;
+  let captionLeft = "50%";
+  let captionTransform = "translateX(-50%)";
+
+  if (mascot && mascot.isVisible) {
+    if (mascot.position === "center") {
+      // Position above mascot head in center
+      captionBottom = isPortrait ? 520 : 120;
+    } else if (mascot.position === "left") {
+      // Shift toward center-right
+      captionLeft = isPortrait ? "56%" : "54%";
+      captionBottom = isPortrait ? 380 : 90;
+    } else if (mascot.position === "right") {
+      // Shift toward center-left
+      captionLeft = isPortrait ? "44%" : "46%";
+      captionBottom = isPortrait ? 380 : 90;
+    }
+  }
 
   return (
     <div
       style={{
         position: "absolute",
-        bottom: isPortrait ? 280 : 70,
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: isPortrait ? "88%" : "75%",
+        bottom: captionBottom,
+        left: captionLeft,
+        transform: captionTransform,
+        width: isPortrait ? "90%" : "75%",
+        maxWidth: isPortrait ? 920 : 1100,
         textAlign: "center",
-        zIndex: 30,
+        zIndex: 35,
         pointerEvents: "none",
+        transition: "bottom 0.2s ease, left 0.2s ease",
       }}
     >
       <div
@@ -88,47 +124,42 @@ export const CaptionsLayer: React.FC<CaptionsLayerProps> = ({ scene }) => {
           display: "inline-flex",
           flexWrap: "wrap",
           justifyContent: "center",
-          gap: isPortrait ? "8px 14px" : "6px 12px",
-          background: "rgba(10, 15, 29, 0.85)",
-          backdropFilter: "blur(16px)",
-          padding: isPortrait ? "18px 30px" : "14px 24px",
-          borderRadius: 24,
-          border: "1.5px solid rgba(255, 255, 255, 0.16)",
-          boxShadow: "0 20px 45px rgba(0, 0, 0, 0.65)",
+          alignItems: "center",
+          gap: isPortrait ? "10px 16px" : "8px 14px",
+          background: "rgba(10, 15, 29, 0.88)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          padding: isPortrait ? "20px 32px" : "14px 26px",
+          borderRadius: 26,
+          border: "1.5px solid rgba(255, 255, 255, 0.18)",
+          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
         }}
       >
         {visibleTokens.map((token, idx) => {
-          const relStart =
-            token.startFrame >= scene.startFrame
-              ? token.startFrame - scene.startFrame
-              : token.startFrame;
-          const relEnd =
-            token.endFrame >= scene.startFrame
-              ? token.endFrame - scene.startFrame
-              : token.endFrame;
-
-          const isActive = frame >= relStart && frame <= relEnd;
-          const isPast = frame > relEnd;
+          const globalIdx = chunkStart + idx;
+          const isActive = frame >= token.start && frame <= token.end;
+          const isPast = frame > token.end;
 
           return (
             <span
-              key={`${chunkStart + idx}-${token.text}`}
+              key={`${globalIdx}-${token.text}`}
               style={{
-                fontSize: isPortrait ? 38 : 28,
-                fontWeight: 800,
-                fontFamily: "Inter, sans-serif",
+                fontSize: isPortrait ? 42 : 30,
+                fontWeight: 900,
+                fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
                 color: isActive
                   ? "#fbbf24"
                   : isPast
                   ? "#ffffff"
                   : "rgba(255, 255, 255, 0.45)",
-                transform: isActive ? "scale(1.18)" : "scale(1.0)",
+                transform: isActive ? "scale(1.15) translateY(-2px)" : "scale(1.0)",
                 display: "inline-block",
-                transition: "transform 0.08s ease-out, color 0.08s ease-out",
+                transition: "transform 0.06s cubic-bezier(0.2, 0, 0, 1), color 0.06s ease",
                 textShadow: isActive
-                  ? "0 0 24px rgba(251, 191, 36, 0.9), 0 2px 4px rgba(0,0,0,0.8)"
-                  : "0 2px 6px rgba(0, 0, 0, 0.7)",
-                letterSpacing: "-0.01em",
+                  ? "0 0 28px rgba(251, 191, 36, 0.95), 0 2px 6px rgba(0,0,0,0.9)"
+                  : "0 2px 6px rgba(0, 0, 0, 0.75)",
+                letterSpacing: "-0.02em",
+                textTransform: "uppercase",
               }}
             >
               {token.text}

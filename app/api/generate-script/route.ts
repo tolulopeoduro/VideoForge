@@ -193,217 +193,284 @@ function synthesizeFromDeepResearch(
   let s3Text = "";
   let s4Text = "";
 
-  if (isSports) {
-    // Dynamic Sports / Football narrative arc
-    s1Text = `With a global fanbase of hundreds of millions and an iconic legacy, ${cleanTitle} isn't just a football club—it is a worldwide cultural phenomenon. But the journey to the summit was shaped by legendary triumphs, near-fatal tragedies, and high-stakes drama.`;
-
-    if (fact1) {
-      s1Text += ` In fact, ${fact1.claim.replace(/\.$/, "")}, laying the foundation for what would become an empire.`;
-    }
-
-    if (fact2) {
-      s2Text = `Behind the silverware and fame, the numbers reveal an intense financial battle. ${fact2.claim} The tension between commercial power and pitch performance has driven decades of intense controversy.`;
-    } else {
-      s2Text = `From the legendary Class of '92 and the historic 1999 Treble under Sir Alex Ferguson to modern record-breaking transfers, the pressure at Old Trafford is unmatched anywhere in world sport.`;
-    }
-
-    s3Text = `Modern football moves at a ruthless pace. Today, takeover bids, multi-billion dollar valuations, and tactical overhauls mean every single match carries monumental consequences for the future of the franchise.`;
-
-    s4Text = `Whether you love them or hate them, ${cleanTitle} proves that staying at the very top of world football requires relentless reinvention and an unbreakable identity.`;
-  } else if (isTech) {
-    // Tech / Engineering narrative arc
-    s1Text = `Everything you thought you knew about ${cleanTitle} is only half the story. Behind the buzzwords lies a complex architectural reality that engineers have debated for decades.`;
-
-    if (fact1) {
-      s2Text = `Here is the critical data point that changes everything: ${fact1.claim} When you calculate the compounding scale, traditional solutions simply fall apart.`;
-    } else {
-      s2Text = `When researchers break down the mathematics, the numbers are staggering. The technical limits of classical computing are being tested like never before.`;
-    }
-
-    if (fact2) {
-      s3Text = `That is exactly why global organizations are re-architecting their systems: ${fact2.claim} The race to standardize modern infrastructure has already reached a critical tipping point.`;
-    } else {
-      s3Text = `This is why industry pioneers are migrating to post-quantum standards and decentralized logic. The cost of failing to adapt will be catastrophic.`;
-    }
-
-    s4Text = `Understanding the underlying mechanics of ${cleanTitle} isn't just academic—it's the definitive blueprint for who wins the next decade of technology.`;
-  } else if (isBusiness) {
-    // Business / Startup narrative arc
-    s1Text = `Most founders look at ${cleanTitle} and see success, but they completely miss the brutal grind and strategic pivots that made it possible.`;
-
-    if (fact1) {
-      s2Text = `The turning point happened when ${fact1.claim} That single strategic decision transformed their economics and unlocked exponential growth.`;
-    } else {
-      s2Text = `When you analyze the unit economics, the advantage becomes obvious. High-velocity execution and customer lock-in created an unassailable moat.`;
-    }
-
-    if (fact2) {
-      s3Text = `However, scale brings its own threats: ${fact2.claim} Sustaining dominance at this level requires ruthless capital allocation and constant disruption.`;
-    } else {
-      s3Text = `In today's fast-moving market, market leaders that stop innovating get replaced in months. The battle for distribution never stops.`;
-    }
-
-    s4Text = `The biggest lesson from ${cleanTitle} is clear: market leaders are not built by luck, but by anchoring every action around undeniable customer value.`;
-  } else {
-    // General Narrative / Documentary arc
-    s1Text = `The true story behind ${cleanTitle} is far more fascinating than what makes the headlines. To understand why it captures global attention, you have to look at the pivotal events that started it all.`;
-
-    if (fact1) {
-      s2Text = `A major catalyst was when ${fact1.claim} That moment altered the trajectory and set off a chain reaction that continues to reverberate today.`;
-    } else {
-      s2Text = `Behind the scenes, the data tells a compelling story. What began as an experimental endeavor quickly evolved into a benchmark for excellence.`;
-    }
-
-    if (fact2) {
-      s3Text = `The stakes became even higher when ${fact2.claim} It challenged conventional wisdom and forced an entire industry to rethink its future.`;
-    } else {
-      s3Text = `Today, the landscape is shifting faster than ever. What worked yesterday is no longer enough to stay relevant in a hyper-connected world.`;
-    }
-
-    s4Text = `As we look ahead, ${cleanTitle} stands as proof that enduring impact comes from relentless dedication to a clear vision.`;
+  // Snappy, fast-paced scenes: exactly 1 spoken sentence per slide (~10-18 words, 3 to 4.5 seconds)
+  // This keeps visual slides changing dynamically every few seconds while the voiceover flows naturally.
+  interface SnappySceneDraft {
+    text: string;
+    bgPrompt: string;
+    bgColor: string;
+    bgMotion: "zoom-in" | "pan-left" | "static";
+    mascotPose: "explaining" | "pointing" | "shocked" | "neutral";
+    mascotPos: "left" | "right" | "center";
+    overlay: any;
   }
 
-  // Calculate duration based on realistic speech cadence
-  const calcFrames = (text: string) => {
-    const words = text.trim().split(/\s+/).length;
-    return Math.max(100, Math.round(words * 12 + 30));
-  };
+  let sceneDrafts: SnappySceneDraft[] = [];
 
-  const dur1 = calcFrames(s1Text);
-  const dur2 = calcFrames(s2Text);
-  const dur3 = calcFrames(s3Text);
-  const dur4 = calcFrames(s4Text);
-
-  const scenes: Scene[] = [
-    {
-      id: `s-${timestamp}-1`,
-      startFrame: 0,
-      durationInFrames: dur1,
-      scriptText: s1Text,
-      wordTokens: [],
-      background: {
-        type: "color",
-        src: isSports ? "#1a0b0b" : "#0f172a",
-        motion: "zoom-in",
-        prompt: isSports
-          ? `Iconic historic sports stadium under roaring stadium floodlights, dramatic red and black cinematic atmosphere, 8k wallpaper`
-          : `Cinematic high-contrast environment representing ${cleanTitle}, dramatic rim lighting, 8k wallpaper`,
-      },
-      mascot: {
-        isVisible: true,
-        pose: isSports ? "explaining" : "shocked",
-        position: "left",
-        entranceAnimation: "slide-up",
-      },
-      overlays: [
-        {
-          id: `o-${timestamp}-1`,
+  if (isSports) {
+    sceneDrafts = [
+      {
+        text: `${cleanTitle} isn't just a football club—it's a global phenomenon with hundreds of millions of passionate fans.`,
+        bgPrompt: `Iconic historic sports stadium under roaring stadium floodlights, dramatic cinematic atmosphere, 8k wallpaper`,
+        bgColor: "#1a0b0b",
+        bgMotion: "zoom-in",
+        mascotPose: "explaining",
+        mascotPos: "left",
+        overlay: {
           type: "lower-third",
-          props: {
-            category: isSports ? "THE DYNASTY" : "CORE REALITY",
-            title: cleanTitle.slice(0, 24),
-            subtitle: isSports ? "A Global Phenomenon" : "The True Story",
-          },
+          props: { category: "GLOBAL ICON", title: cleanTitle.slice(0, 24), subtitle: "Worldwide Phenomenon" },
         },
-      ],
-    },
-    {
-      id: `s-${timestamp}-2`,
-      startFrame: dur1,
-      durationInFrames: dur2,
-      scriptText: s2Text,
-      wordTokens: [],
-      background: {
-        type: "color",
-        src: isSports ? "#2e0f0f" : "#1e1b4b",
-        motion: "pan-left",
-        prompt: isSports
-          ? `Modern sports boardroom with trophy showcase in glass case and dramatic spotlights`
-          : `High-tech laboratory with holographic data graphs and volumetric blue mist`,
       },
-      mascot: {
-        isVisible: true,
-        pose: "pointing",
-        position: "left",
-        entranceAnimation: "pop-in",
+      {
+        text: fact1
+          ? `In fact, ${fact1.claim.replace(/\.$/, "")}, laying the bedrock for a sporting empire.`
+          : `From industrial railway roots in 1878, they climbed to the absolute summit of world football.`,
+        bgPrompt: `Vintage industrial railway workshop with glowing iron furnaces and vintage steam atmosphere`,
+        bgColor: "#241010",
+        bgMotion: "pan-left",
+        mascotPose: "pointing",
+        mascotPos: "left",
+        overlay: {
+          type: "stat-counter",
+          props: { label: "Club Founded", targetValue: 1878, prefix: "", suffix: "", accentColor: "#ef4444" },
+        },
       },
-      overlays: [
-        {
-          id: `o-${timestamp}-2`,
+      {
+        text: `With a record 20 English top-flight league titles, their dominance defined modern football history.`,
+        bgPrompt: `Gleaming silver championship trophies in a modern glass showcase with dramatic red spotlights`,
+        bgColor: "#1c0d0d",
+        bgMotion: "zoom-in",
+        mascotPose: "shocked",
+        mascotPos: "center",
+        overlay: {
+          type: "stat-counter",
+          props: { label: "League Titles", targetValue: 20, prefix: "", suffix: " Titles", accentColor: "#f59e0b" },
+        },
+      },
+      {
+        text: `Sir Alex Ferguson's historic 1999 Treble forged an unbreakable reputation for miraculous, last-second comebacks.`,
+        bgPrompt: `Packed roaring football stadium in dramatic night rain with green pitch and intense spotlight mist`,
+        bgColor: "#2e0f0f",
+        bgMotion: "pan-left",
+        mascotPose: "pointing",
+        mascotPos: "right",
+        overlay: {
+          type: "lower-third",
+          props: { category: "HISTORIC MOMENT", title: "1999 Treble", subtitle: "Sir Alex Ferguson Era" },
+        },
+      },
+      {
+        text: fact2
+          ? `Behind the silverware lies high-stakes finance: ${fact2.claim.replace(/\.$/, "")}.`
+          : `Today, multi-billion dollar boardroom battles and tactical overhauls keep Old Trafford in constant global headlines.`,
+        bgPrompt: `High-rise boardroom overlooking illuminated stadium with financial data screens`,
+        bgColor: "#180a0a",
+        bgMotion: "zoom-in",
+        mascotPose: "explaining",
+        mascotPos: "left",
+        overlay: {
+          type: "progress-ring",
+          props: { label: "Commercial Power", percentage: 95, color: "#ef4444" },
+        },
+      },
+      {
+        text: `Whether you love them or hate them, the drama never stops at the Theatre of Dreams.`,
+        bgPrompt: `Iconic red stadium gates under dramatic twilight sky with warm incandescent streetlights`,
+        bgColor: "#110606",
+        bgMotion: "static",
+        mascotPose: "neutral",
+        mascotPos: "left",
+        overlay: {
+          type: "lower-third",
+          props: { category: "THE VERDICT", title: "Theatre of Dreams", subtitle: "Enduring Legacy" },
+        },
+      },
+    ];
+  } else if (isTech) {
+    sceneDrafts = [
+      {
+        text: `Everything you thought you knew about ${cleanTitle} is only half the story.`,
+        bgPrompt: `Futuristic holographic computer core with glowing neon circuits and volumetric blue mist`,
+        bgColor: "#0f172a",
+        bgMotion: "zoom-in",
+        mascotPose: "shocked",
+        mascotPos: "left",
+        overlay: {
+          type: "lower-third",
+          props: { category: "THE REVELATION", title: cleanTitle.slice(0, 24), subtitle: "Architecture Revealed" },
+        },
+      },
+      {
+        text: fact1
+          ? `Here is the critical data point that changes everything: ${fact1.claim.replace(/\.$/, "")}.`
+          : `Behind the buzzwords lies a complex engineering architecture that solves fundamental scale limits.`,
+        bgPrompt: `Server room with rows of glowing high-density compute racks and fiber optic cables`,
+        bgColor: "#1e1b4b",
+        bgMotion: "pan-left",
+        mascotPose: "pointing",
+        mascotPos: "left",
+        overlay: {
           type: "stat-counter",
           props: {
-            label: isSports ? "League Titles" : fact1?.source || "Key Metric",
-            targetValue: isSports ? 20 : parseInt(fact1?.stat?.replace(/\D/g, "") || "94", 10) || 94,
-            prefix: isSports ? "" : fact1?.stat?.startsWith("+") ? "+" : "",
-            suffix: isSports ? " Titles" : fact1?.stat?.includes("%") ? "%" : "",
-            accentColor: isSports ? "#ef4444" : "#6366f1",
+            label: fact1?.source || "Efficiency",
+            targetValue: parseInt(fact1?.stat?.replace(/\D/g, "") || "98", 10) || 98,
+            prefix: "+",
+            suffix: "%",
+            accentColor: "#6366f1",
           },
         },
-      ],
-    },
-    {
-      id: `s-${timestamp}-3`,
-      startFrame: dur1 + dur2,
-      durationInFrames: dur3,
-      scriptText: s3Text,
-      wordTokens: [],
-      background: {
-        type: "color",
-        src: "#0f172a",
-        motion: "zoom-in",
-        prompt: isSports
-          ? `Packed football stadium with pitch grass and dramatic night mist, cinematic wide angle 8k`
-          : `Emerald crystalline architectural studio with ambient warm sunrise illumination`,
       },
-      mascot: {
-        isVisible: true,
-        pose: "shocked",
-        position: "center",
-        entranceAnimation: "pop-in",
+      {
+        text: `Traditional systems collapse when exponential data volumes hit classical algorithmic bottlenecks.`,
+        bgPrompt: `Abstract digital data streams colliding in dark cyberspace with volumetric cyan lighting`,
+        bgColor: "#0a1128",
+        bgMotion: "zoom-in",
+        mascotPose: "explaining",
+        mascotPos: "center",
+        overlay: {
+          type: "code-snippet",
+          props: {
+            filename: "core-pipeline.ts",
+            code: `// High-velocity processing\nconst buffer = stream.pipe();\nassert(throughput > 1e6);`,
+          },
+        },
       },
-      overlays: [
-        {
-          id: `o-${timestamp}-3`,
+      {
+        text: fact2
+          ? `Global pioneers are rapidly re-architecting: ${fact2.claim.replace(/\.$/, "")}.`
+          : `Modern engineering teams are migrating to distributed neural pipelines at unprecedented speed.`,
+        bgPrompt: `Futuristic engineering command center with glass dashboard monitors and holographic graphs`,
+        bgColor: "#091e3a",
+        bgMotion: "pan-left",
+        mascotPose: "pointing",
+        mascotPos: "right",
+        overlay: {
           type: "progress-ring",
-          props: {
-            label: isSports ? "Win Rate Peak" : "Adoption Index",
-            percentage: isSports ? 72 : 88,
-            color: isSports ? "#f59e0b" : "#10b981",
-          },
+          props: { label: "Adoption Velocity", percentage: 91, color: "#06b6d4" },
         },
-      ],
-    },
-    {
-      id: `s-${timestamp}-4`,
-      startFrame: dur1 + dur2 + dur3,
-      durationInFrames: dur4,
-      scriptText: s4Text,
+      },
+      {
+        text: `Understanding these underlying mechanics isn't just academic—it's the blueprint for the next decade.`,
+        bgPrompt: `Minimalist dark studio with brilliant neon blue geometric art installations`,
+        bgColor: "#090d16",
+        bgMotion: "static",
+        mascotPose: "neutral",
+        mascotPos: "left",
+        overlay: {
+          type: "lower-third",
+          props: { category: "CONCLUSION", title: "Next Frontier", subtitle: "Strategic Advantage" },
+        },
+      },
+    ];
+  } else {
+    // General / Business narrative arc
+    sceneDrafts = [
+      {
+        text: `The true story behind ${cleanTitle} is far more fascinating than what makes the headlines.`,
+        bgPrompt: `Minimalist dark studio with volumetric rim lighting, cinematic 8k wallpaper`,
+        bgColor: "#0f172a",
+        bgMotion: "zoom-in",
+        mascotPose: "explaining",
+        mascotPos: "left",
+        overlay: {
+          type: "lower-third",
+          props: { category: "THE INSIGHT", title: cleanTitle.slice(0, 24), subtitle: "Inside The Story" },
+        },
+      },
+      {
+        text: fact1
+          ? `The turning point happened when ${fact1.claim.replace(/\.$/, "")}.`
+          : `A pivotal breakthrough disrupted conventional wisdom and unlocked exponential momentum.`,
+        bgPrompt: `Architectural glass pavilion with warm morning sunlight illuminating geometric pillars`,
+        bgColor: "#1e1b4b",
+        bgMotion: "pan-left",
+        mascotPose: "pointing",
+        mascotPos: "left",
+        overlay: {
+          type: "stat-counter",
+          props: { label: "Impact Score", targetValue: 100, prefix: "", suffix: "%", accentColor: "#6366f1" },
+        },
+      },
+      {
+        text: `What began as an experimental endeavor quickly evolved into a universal gold standard.`,
+        bgPrompt: `Modern tech incubator office with floor-to-ceiling windows and creative drafting walls`,
+        bgColor: "#0c1a30",
+        bgMotion: "zoom-in",
+        mascotPose: "shocked",
+        mascotPos: "center",
+        overlay: {
+          type: "progress-ring",
+          props: { label: "Growth Trajectory", percentage: 88, color: "#10b981" },
+        },
+      },
+      {
+        text: fact2
+          ? `However, scale brings its own challenges: ${fact2.claim.replace(/\.$/, "")}.`
+          : `Sustaining leadership at this velocity requires relentless innovation and clear vision.`,
+        bgPrompt: `High-contrast monochrome studio with deep crimson lighting accents`,
+        bgColor: "#1a0b12",
+        bgMotion: "pan-left",
+        mascotPose: "explaining",
+        mascotPos: "right",
+        overlay: {
+          type: "lower-third",
+          props: { category: "THE CHALLENGE", title: "High-Stakes Scale", subtitle: "Navigating Growth" },
+        },
+      },
+      {
+        text: `As we look ahead, ${cleanTitle} proves that true excellence is built through persistent reinvention.`,
+        bgPrompt: `Minimalist executive lounge with sweeping twilight city skyline view`,
+        bgColor: "#090d16",
+        bgMotion: "static",
+        mascotPose: "neutral",
+        mascotPos: "left",
+        overlay: {
+          type: "lower-third",
+          props: { category: "TAKEAWAY", title: "Enduring Vision", subtitle: "The Bottom Line" },
+        },
+      },
+    ];
+  }
+
+  // Calculate snappy frame duration: ~3.5 to 5.0 seconds per slide at 30fps (approx 95 to 140 frames)
+  const calcSnappyFrames = (text: string) => {
+    const words = text.trim().split(/\s+/).length;
+    // ~12.5 frames per word + 15 frames padding (~3.5-4.5s total)
+    return Math.max(90, Math.min(150, Math.round(words * 12.5 + 15)));
+  };
+
+  let cumulativeFrame = 0;
+  const scenes: Scene[] = sceneDrafts.map((draft, i) => {
+    const dur = calcSnappyFrames(draft.text);
+    const start = cumulativeFrame;
+    cumulativeFrame += dur;
+
+    return {
+      id: `s-${timestamp}-${i + 1}`,
+      startFrame: start,
+      durationInFrames: dur,
+      scriptText: draft.text,
       wordTokens: [],
       background: {
         type: "color",
-        src: "#090d16",
-        motion: "static",
-        prompt: `Sleek minimalist studio with warm amber and red ambient lighting`,
+        src: draft.bgColor,
+        motion: draft.bgMotion,
+        prompt: draft.bgPrompt,
       },
       mascot: {
         isVisible: true,
-        pose: "neutral",
-        position: "left",
-        entranceAnimation: "fade",
+        pose: draft.mascotPose,
+        position: draft.mascotPos,
+        entranceAnimation: i % 2 === 0 ? "slide-up" : "pop-in",
       },
       overlays: [
         {
-          id: `o-${timestamp}-4`,
-          type: "lower-third",
-          props: {
-            category: "THE VERDICT",
-            title: isSports ? "Legacy of Greatness" : "Strategic Takeaway",
-            subtitle: isSports ? "Enduring Sporting Power" : "The Core Principle",
-          },
+          id: `o-${timestamp}-${i + 1}`,
+          ...draft.overlay,
         },
       ],
-    },
-  ];
+    };
+  });
 
   // Fact checks list
   const factChecks: ScriptOptimizationResult["factChecks"] = [];
@@ -485,9 +552,11 @@ STRICT WRITING RULES:
    - Write like a top-tier creator or documentary narrator (think Vox, Johnny Harris, The Athletic, MagnatesMedia).
    - If the topic is sports/football, speak with the passion and analytical insight of a football insider (trophies, drama, fans, transfers, legacy).
    - If the topic is tech or science, speak with the sharp insight of an engineer breaking down an invisible revolution.
-3. SCENE LENGTH:
-   - Each scene's "scriptText" MUST BE A SUBSTANTIAL SPOKEN PARAGRAPH (2 to 4 spoken sentences, about 35 to 55 words per scene).
-   - DO NOT write 1 short sentence or weird fragmented lines.
+3. FAST-PACED SCENE LENGTH (3 TO 5 SECONDS PER SLIDE):
+   - Write 5 to 7 dynamic, fast-paced slides.
+   - Each scene's "scriptText" MUST BE EXACTLY ONE SNAPPY, PUNCHY SPOKEN SENTENCE (11 to 18 words, ~3.5 to 5 seconds).
+   - DO NOT write long paragraphs. Rapid visual slide transitions every few seconds keep viewer retention ultra-high, while the spoken sentences flow together seamlessly like a natural, continuous voiceover.
+   - Set each scene's durationInFrames to approx 100-140 frames (at 30fps).
 4. FACTS & MASCOT CHOREOGRAPHY:
    - Explicitly weave in the real numbers, dates, names, and organizations from the research context.
    - Choose expressive mascot poses ("neutral" | "explaining" | "shocked" | "pointing") and entrance animations ("slide-up" | "pop-in" | "fade").
@@ -506,8 +575,8 @@ RETURN ONLY VALID JSON matching this exact structure:
     {
       "id": "s-1",
       "startFrame": 0,
-      "durationInFrames": 140,
-      "scriptText": "2 to 4 rich spoken sentences...",
+      "durationInFrames": 120,
+      "scriptText": "1 snappy spoken sentence (11-18 words)...",
       "wordTokens": [],
       "background": {
         "type": "color",
@@ -604,8 +673,9 @@ async function callGeminiEndpoint(opts: {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const promptText = `You are an expert AI video script director.
-Write a structured 3 to 4 scene video script JSON based on this topic and verified research.
-Each scene's scriptText MUST be 2-4 spoken sentences (35-50 words), full of substance and real facts.
+Write a structured 5 to 7 fast-paced scene video script JSON based on this topic and verified research.
+Each scene represents a quick slide lasting 3 to 5 seconds. Each scene's scriptText MUST be exactly ONE punchy spoken sentence (11-18 words, duration approx 100-140 frames at 30fps), flowing naturally into the next sentence.
+The visuals must shift rapidly while the voiceover stays continuous, natural, and free-flowing.
 
 Topic: ${topic}
 Raw Script: ${rawScript || "None"}
