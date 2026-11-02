@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
+import fs from "fs";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +18,11 @@ export async function POST(req: NextRequest) {
     }
 
     const scriptPath = path.resolve(process.cwd(), "scripts", "pipeline.py");
+    const venvPython = path.resolve(process.cwd(), "venv", "bin", "python");
+    const pythonCmd = fs.existsSync(venvPython) ? venvPython : "python3";
 
-    // Spawn Python child process
-    const pythonProc = spawn("python3", [scriptPath], {
+    // Spawn Python child process with venv priority
+    const pythonProc = spawn(pythonCmd, [scriptPath], {
       cwd: process.cwd(),
       env: {
         ...process.env,

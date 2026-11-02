@@ -3,8 +3,8 @@
 ZeroTrack Video Studio - Python TTS & Audio Alignment Pipeline
 Communicates with Node.js via stdin/stdout JSON stream.
 Supports:
-1. Kokoro-82M TTS and faster-whisper word-level alignment (when installed).
-2. Native system TTS (macOS 'say' + 'afconvert') with proportional word alignment.
+1. Kokoro-82M Neural TTS & faster-whisper word-level alignment (installed & active).
+2. Native macOS system TTS ('say' + 'afconvert') with proportional word alignment.
 3. High-fidelity acoustic synthesizer fallback with harmonic formant modeling.
 """
 
@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import numpy as np
 
 FPS = 30
 SAMPLE_RATE = 24000  # 24kHz standard for Kokoro-82M
@@ -57,6 +58,103 @@ except ImportError:
 
 HAS_MACOS_SAY = bool(shutil.which("say") and shutil.which("afconvert"))
 
+def synthesize_kokoro_neural(scenes, output_path):
+    """
+    Synthesizes speech using the Kokoro-82M neural model at 24kHz,
+    and extracts word-level timestamps with Faster-Whisper.
+    """
+    emit_progress("synthesizing_speech", 15, "Initializing Kokoro-82M neural pipeline...")
+    pipeline = kokoro.KPipeline(lang_code="a")
+
+    emit_progress("transcribing_alignment", 28, "Initializing Faster-Whisper alignment model...")
+    whisper_model = WhisperModel("tiny.en", device="cpu", compute_type="int8")
+
+    all_audio_chunks = []
+    updated_scenes = []
+    current_time_sec = 0.0
+    total_scenes = len(scenes)
+
+    for idx, scene in enumerate(scenes):
+        text = scene.get("scriptText", "").strip() or "Scene pause."
+        progress_pct = 30 + int(48 * (idx + 1) / total_scenes)
+        emit_progress(
+            "synthesizing_speech",
+            progress_pct,
+            f"Synthesizing Kokoro voice for Scene {idx + 1}/{total_scenes}..."
+        )
+
+        scene_start_sec = current_time_sec
+        scene_chunks = []
+        for _, _, chunk in pipeline(text, voice="af_heart", speed=1.0):
+            arr = chunk.numpy() if hasattr(chunk, "numpy") else np.array(chunk)
+            scene_chunks.append(arr)
+
+        if not scene_chunks:
+            scene_audio = np.zeros(int(1.0 * SAMPLE_RATE), dtype=np.float32)
+        else:
+            scene_audio = np.concatenate(scene_chunks)
+
+        scene_dur_sec = len(scene_audio) / float(SAMPLE_RATE)
+        all_audio_chunks.append(scene_audio)
+
+        # Word-level timestamp alignment with Faster-Whisper
+        scene_word_tokens = []
+        try:
+            segments, _ = whisper_model.transcribe(scene_audio, word_timestamps=True)
+            for seg in segments:
+                for w in seg.words:
+                    clean_w = w.word.strip()
+                    if not clean_w:
+                        continue
+                    w_start_frame = round((scene_start_sec + w.start) * FPS)
+                    w_end_frame = max(w_start_frame + 2, round((scene_start_sec + w.end) * FPS))
+                    scene_word_tokens.append({
+                        "text": clean_w,
+                        "startFrame": w_start_frame,
+                        "endFrame": w_end_frame,
+                    })
+        except Exception as w_err:
+            # Fallback to proportional word interval calculation
+            words = re.findall(r"\S+", text)
+            total_chars = sum(len(re.sub(r"[^\w]", "", w)) or 1 for w in words)
+            w_cursor = scene_start_sec
+            for w in words:
+                char_len = max(len(re.sub(r"[^\w]", "", w)), 1)
+                w_dur = max(0.18, scene_dur_sec * (char_len / float(total_chars)))
+                w_start = round(w_cursor * FPS)
+                w_end = max(w_start + 2, round((w_cursor + w_dur) * FPS))
+                scene_word_tokens.append({"text": w, "startFrame": w_start, "endFrame": w_end})
+                w_cursor += w_dur
+
+        current_time_sec += scene_dur_sec
+
+        # 0.15s natural inter-scene breath padding
+        pad_dur = 0.15
+        pad_samples = np.zeros(int(pad_dur * SAMPLE_RATE), dtype=np.float32)
+        all_audio_chunks.append(pad_samples)
+        current_time_sec += pad_dur
+
+        scene_end_sec = current_time_sec
+        scene_start_frame = round(scene_start_sec * FPS)
+        scene_end_frame = round(scene_end_sec * FPS)
+        duration_in_frames = max(30, scene_end_frame - scene_start_frame)
+
+        updated_scene = dict(scene)
+        updated_scene["startFrame"] = scene_start_frame
+        updated_scene["durationInFrames"] = duration_in_frames
+        updated_scene["wordTokens"] = scene_word_tokens
+        updated_scenes.append(updated_scene)
+
+    master_audio = np.concatenate(all_audio_chunks)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    sf.write(output_path, master_audio, SAMPLE_RATE, subtype="PCM_16")
+
+    total_frames = max(30, round(current_time_sec * FPS))
+    emit_progress("packaging_assets", 95, "Locking universal state frame timing...")
+    time.sleep(0.1)
+
+    return updated_scenes, total_frames
+
 def synthesize_macos_say(scenes, output_path):
     """
     Uses macOS native speech synthesis for real human voiceover at 24kHz,
@@ -87,7 +185,6 @@ def synthesize_macos_say(scenes, output_path):
             aiff_file = os.path.join(tmp_dir, f"scene_{idx}.aiff")
             wav_file = os.path.join(tmp_dir, f"scene_{idx}.wav")
 
-            # Clean text for say
             clean_text = re.sub(r'["`$]', "", text) if text else "Scene pause."
             subprocess.run(["say", "-o", aiff_file, clean_text], check=True)
             subprocess.run(
@@ -102,7 +199,6 @@ def synthesize_macos_say(scenes, output_path):
                 raw_bytes = wf.readframes(scene_frames)
                 all_audio_bytes.extend(raw_bytes)
 
-            # Compute word token frames proportionally across the scene duration
             total_chars = sum(len(re.sub(r"[^\w]", "", w)) or 1 for w in words)
             scene_word_tokens = []
             word_cursor_sec = scene_start_sec
@@ -125,7 +221,6 @@ def synthesize_macos_say(scenes, output_path):
 
             current_time_sec += scene_dur_sec
 
-            # Small 0.15s inter-scene breath padding
             pad_dur = 0.15
             pad_frames = int(pad_dur * SAMPLE_RATE)
             all_audio_bytes.extend(b"\x00\x00" * pad_frames)
@@ -187,7 +282,6 @@ def synthesize_fallback_wav(scenes, output_path):
             f"Synthesizing audio for Scene {idx + 1}/{total_scenes}..."
         )
 
-        # Brief lead-in pause (0.15s)
         lead_in_sec = 0.15
         lead_in_samples = int(lead_in_sec * SAMPLE_RATE)
         all_samples.extend([0] * lead_in_samples)
@@ -277,16 +371,15 @@ def synthesize_fallback_wav(scenes, output_path):
 def run_production_or_fallback(scenes, output_path):
     """
     Tiered Speech Synthesis:
-    1. Kokoro neural model (if package installed)
-    2. Native OS high quality speech (macOS 'say' + 'afconvert')
-    3. Acoustic formant synthesizer fallback
+    1. Kokoro-82M neural model + Faster-Whisper alignment (Primary).
+    2. Native OS high quality speech (macOS 'say' + 'afconvert').
+    3. Acoustic formant synthesizer fallback.
     """
     if HAS_KOKORO and HAS_WHISPER and HAS_SOUNDFILE:
         try:
-            emit_progress("synthesizing_speech", 20, "Synthesizing with Kokoro-82M neural model...")
-            # Kokoro neural inference
+            return synthesize_kokoro_neural(scenes, output_path)
         except Exception as e:
-            emit_progress("synthesizing_speech", 25, f"Kokoro model warning: {e}. Falling back.")
+            emit_progress("synthesizing_speech", 25, f"Neural engine warning: {e}. Falling back to native speech.")
 
     if HAS_MACOS_SAY:
         try:
