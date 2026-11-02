@@ -40,20 +40,32 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
   selectedSceneId,
   onSelectScene,
 }) => {
-  const playerRef = useRef<PlayerRef>(null);
+  const playerRef = useRef<PlayerRef | null>(null);
+  const [player, setPlayer] = useState<PlayerRef | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isLooping, setIsLooping] = useState(true);
   const [showSafeMargins, setShowSafeMargins] = useState(false);
 
-  const totalFrames = Math.max(30, state.metadata.totalDurationInFrames);
+  const calculatedTotalFrames = state.scenes.reduce(
+    (acc, s) => acc + (s.durationInFrames || 30),
+    0
+  );
+  const totalFrames = Math.max(
+    30,
+    state.metadata.totalDurationInFrames || calculatedTotalFrames
+  );
   const fps = state.metadata.fps || 30;
   const isPortrait = state.metadata.height > state.metadata.width;
 
-  // Listen to Player frame updates
+  const setPlayerRef = useCallback((node: PlayerRef | null) => {
+    playerRef.current = node;
+    setPlayer(node);
+  }, []);
+
+  // Listen to Player frame and playback events whenever dynamic player instance mounts
   useEffect(() => {
-    const player = playerRef.current;
     if (!player) return;
 
     const onFrameUpdate = (e: { detail: { frame: number } }) => {
@@ -62,52 +74,83 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
 
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    const onError = (e: { detail: { error: Error } }) => {
+      console.warn("Remotion Player event error:", e.detail?.error);
+    };
 
     player.addEventListener("frameupdate", onFrameUpdate);
     player.addEventListener("play", onPlay);
     player.addEventListener("pause", onPause);
+    player.addEventListener("ended", onEnded);
+    player.addEventListener("error", onError);
+
+    // Initial sync with player instance
+    try {
+      setIsPlaying(player.isPlaying());
+      setCurrentFrame(player.getCurrentFrame());
+    } catch (e) {}
 
     return () => {
       player.removeEventListener("frameupdate", onFrameUpdate);
       player.removeEventListener("play", onPlay);
       player.removeEventListener("pause", onPause);
+      player.removeEventListener("ended", onEnded);
+      player.removeEventListener("error", onError);
     };
-  }, []);
+  }, [player]);
+
+  // Fallback frame sync loop: guarantees playhead ticks smoothly during playback
+  useEffect(() => {
+    if (!isPlaying || !player) return;
+
+    const interval = setInterval(() => {
+      try {
+        const frame = player.getCurrentFrame();
+        if (typeof frame === "number") {
+          setCurrentFrame(frame);
+        }
+      } catch (e) {}
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, player]);
 
   const togglePlay = useCallback(() => {
-    if (!playerRef.current) return;
+    const activePlayer = playerRef.current || player;
+    if (!activePlayer) return;
     try {
-      if (playerRef.current.isPlaying()) {
-        playerRef.current.pause();
+      if (activePlayer.isPlaying()) {
+        activePlayer.pause();
         setIsPlaying(false);
       } else {
-        playerRef.current.play();
+        activePlayer.play();
         setIsPlaying(true);
       }
     } catch (err) {
       console.warn("Player togglePlay error:", err);
       // Fallback if browser audio policy blocked playback
       try {
-        if (playerRef.current) {
-          playerRef.current.mute();
-          setIsMuted(true);
-          playerRef.current.play();
-          setIsPlaying(true);
-        }
+        activePlayer.mute();
+        setIsMuted(true);
+        activePlayer.play();
+        setIsPlaying(true);
       } catch (retryErr) {
         console.error("Retry play error:", retryErr);
       }
     }
-  }, []);
+  }, [player]);
 
   const handleSeek = useCallback(
     (frame: number) => {
-      if (!playerRef.current) return;
+      const activePlayer = playerRef.current || player;
       const target = Math.max(0, Math.min(totalFrames - 1, frame));
-      playerRef.current.seekTo(target);
       setCurrentFrame(target);
+      if (activePlayer) {
+        activePlayer.seekTo(target);
+      }
     },
-    [totalFrames]
+    [totalFrames, player]
   );
 
   const stepFrame = useCallback(
@@ -118,21 +161,25 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
   );
 
   const handleRestart = useCallback(() => {
-    if (!playerRef.current) return;
-    playerRef.current.seekTo(0);
-    playerRef.current.play();
-  }, []);
+    const activePlayer = playerRef.current || player;
+    if (!activePlayer) return;
+    activePlayer.seekTo(0);
+    setCurrentFrame(0);
+    activePlayer.play();
+    setIsPlaying(true);
+  }, [player]);
 
   const toggleMute = useCallback(() => {
-    if (!playerRef.current) return;
+    const activePlayer = playerRef.current || player;
+    if (!activePlayer) return;
     if (isMuted) {
-      playerRef.current.unmute();
+      activePlayer.unmute();
       setIsMuted(false);
     } else {
-      playerRef.current.mute();
+      activePlayer.mute();
       setIsMuted(true);
     }
-  }, [isMuted]);
+  }, [isMuted, player]);
 
   // Jump to next or previous scene start frame
   const jumpScene = useCallback(
@@ -262,7 +309,6 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
 
         {/* Remotion Player Frame with Studio Matte Bezel */}
         <div
-          onClick={togglePlay}
           className={`relative rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] border border-white/[0.12] bg-black flex items-center justify-center transition-all cursor-pointer group ${
             isPortrait
               ? "h-[94%] max-h-[740px] aspect-[9/16]"
@@ -270,7 +316,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
           }`}
         >
           <Player
-            ref={playerRef}
+            ref={setPlayerRef}
             component={ZeroTrackComposition as any}
             inputProps={{ state }}
             durationInFrames={totalFrames}
@@ -282,6 +328,7 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
               height: "100%",
             }}
             controls={false}
+            clickToPlay={true}
             loop={isLooping}
             autoPlay={false}
           />
