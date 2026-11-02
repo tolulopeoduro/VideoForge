@@ -11,7 +11,11 @@ interface ZeroTrackCompositionProps {
 }
 
 const resolveAudioSrc = (src?: string) => {
-  if (!src) return undefined;
+  if (!src || !src.trim()) return undefined;
+  if (src.startsWith("/generated/")) {
+    const filename = src.replace("/generated/", "");
+    return `/api/media/${filename}`;
+  }
   if (src.startsWith("/")) return staticFile(src);
   return src;
 };

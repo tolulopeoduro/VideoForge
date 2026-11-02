@@ -453,6 +453,8 @@ def run_pipeline(payload):
 
         emit({
             "type": "complete",
+            "percent": 100,
+            "message": "Speech synthesis & word-level frame alignment complete!",
             "audioPath": audio_full_path,
             "audioUrl": audio_url,
             "backgroundMusicUrl": "/audio/chill-beat.wav",

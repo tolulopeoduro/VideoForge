@@ -76,12 +76,29 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
 
   const togglePlay = useCallback(() => {
     if (!playerRef.current) return;
-    if (isPlaying) {
-      playerRef.current.pause();
-    } else {
-      playerRef.current.play();
+    try {
+      if (playerRef.current.isPlaying()) {
+        playerRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        playerRef.current.play();
+        setIsPlaying(true);
+      }
+    } catch (err) {
+      console.warn("Player togglePlay error:", err);
+      // Fallback if browser audio policy blocked playback
+      try {
+        if (playerRef.current) {
+          playerRef.current.mute();
+          setIsMuted(true);
+          playerRef.current.play();
+          setIsPlaying(true);
+        }
+      } catch (retryErr) {
+        console.error("Retry play error:", retryErr);
+      }
     }
-  }, [isPlaying]);
+  }, []);
 
   const handleSeek = useCallback(
     (frame: number) => {
@@ -245,7 +262,8 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
 
         {/* Remotion Player Frame with Studio Matte Bezel */}
         <div
-          className={`relative rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] border border-white/[0.12] bg-black flex items-center justify-center transition-all ${
+          onClick={togglePlay}
+          className={`relative rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] border border-white/[0.12] bg-black flex items-center justify-center transition-all cursor-pointer group ${
             isPortrait
               ? "h-[94%] max-h-[740px] aspect-[9/16]"
               : "w-[94%] max-w-[960px] aspect-[16/9]"
@@ -267,6 +285,15 @@ export const CenterPlayerPanel: React.FC<CenterPlayerPanelProps> = ({
             loop={isLooping}
             autoPlay={false}
           />
+
+          {/* Canvas click-to-play hover badge */}
+          {!isPlaying && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="w-14 h-14 rounded-full bg-studio-accent/90 backdrop-blur-md flex items-center justify-center text-white shadow-glow">
+                <Play className="w-6 h-6 fill-white translate-x-0.5" />
+              </div>
+            </div>
+          )}
 
           {/* Optional Safe Area Overlay Mask for Vertical Video */}
           {showSafeMargins && isPortrait && <div className="safe-area-overlay" />}
