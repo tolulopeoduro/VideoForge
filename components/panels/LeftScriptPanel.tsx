@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MasterVideoState, Scene } from "@/types/schema";
+import { KokoroVoiceId, MasterVideoState, Scene } from "@/types/schema";
 import {
   Plus,
   Trash2,
@@ -21,7 +21,25 @@ import {
   CheckCircle2,
   AlertCircle,
   Split,
+  Volume2,
+  Sliders,
 } from "lucide-react";
+
+const KOKORO_VOICES: Array<{
+  id: KokoroVoiceId;
+  name: string;
+  accent: string;
+  style: string;
+}> = [
+  { id: "af_heart", name: "Heart", accent: "US ♀", style: "Warm Storyteller" },
+  { id: "af_bella", name: "Bella", accent: "US ♀", style: "Expressive Creator" },
+  { id: "af_nicole", name: "Nicole", accent: "US ♀", style: "Crisp Documentary" },
+  { id: "af_sarah", name: "Sarah", accent: "US ♀", style: "Energetic Viral" },
+  { id: "am_adam", name: "Adam", accent: "US ♂", style: "Deep Cinema" },
+  { id: "am_michael", name: "Michael", accent: "US ♂", style: "Punchy Analyst" },
+  { id: "bf_emma", name: "Emma", accent: "UK ♀", style: "British Editorial" },
+  { id: "bm_george", name: "George", accent: "UK ♂", style: "BBC Broadcast" },
+];
 
 interface LeftScriptPanelProps {
   state: MasterVideoState;
@@ -48,7 +66,22 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
   isSyncing,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [showVoiceStudio, setShowVoiceStudio] = useState(false);
   const isAudioLocked = Boolean(state.audio.voiceTrackUrl);
+  const currentVoiceId = state.audio.voiceId || "af_heart";
+  const currentVoiceSpeed = state.audio.voiceSpeed || 1.12;
+  const sfxEnabled = state.audio.sfxEnabled !== false;
+  const autoDucking = state.audio.autoDucking !== false;
+
+  const updateAudioSettings = (patch: Partial<MasterVideoState["audio"]>) => {
+    onUpdateState((prev) => ({
+      ...prev,
+      audio: {
+        ...prev.audio,
+        ...patch,
+      },
+    }));
+  };
 
   const handleScriptChange = (sceneId: string, newText: string) => {
     onUpdateState((prev) => {
@@ -415,31 +448,161 @@ export const LeftScriptPanel: React.FC<LeftScriptPanelProps> = ({
           />
         </div>
 
-        {/* Sync Status strip */}
+        {/* Sync Status & Voice Studio Toggle strip */}
         <div className="flex items-center justify-between text-[11px] px-1">
           <div className="flex items-center gap-1.5 text-slate-400">
             <Clock className="w-3 h-3 text-indigo-400" />
             <span>
-              Total runtime:{" "}
+              Runtime:{" "}
               <strong className="text-white font-mono tabular-nums">
                 {(state.metadata.totalDurationInFrames / 30).toFixed(1)}s
               </strong>
             </span>
           </div>
 
-          <button
-            onClick={onTriggerSync}
-            disabled={isSyncing}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all ${
-              isAudioLocked
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                : "bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25"
-            }`}
-          >
-            <Mic className="w-3 h-3" />
-            <span>{isSyncing ? "Syncing..." : isAudioLocked ? "Audio Locked" : "Sync Needed"}</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowVoiceStudio((v) => !v)}
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg font-bold text-[10px] border transition-all ${
+                showVoiceStudio
+                  ? "bg-indigo-600/25 border-indigo-500 text-indigo-200"
+                  : "bg-studio-900 border-white/[0.08] text-slate-300 hover:text-white"
+              }`}
+              title="Configure Speaker Voice, Speed, SFX & Auto-Ducking"
+            >
+              <Volume2 className="w-3 h-3 text-indigo-400" />
+              <span>
+                {KOKORO_VOICES.find((v) => v.id === currentVoiceId)?.name || "Heart"} •{" "}
+                {currentVoiceSpeed}x
+              </span>
+            </button>
+
+            <button
+              onClick={onTriggerSync}
+              disabled={isSyncing}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all ${
+                isAudioLocked
+                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+                  : "bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25"
+              }`}
+            >
+              <Mic className="w-3 h-3" />
+              <span>{isSyncing ? "Syncing..." : isAudioLocked ? "Re-Sync" : "Sync Voice"}</span>
+            </button>
+          </div>
         </div>
+
+        {/* Collapsible Multi-Voice & SFX Audio Studio Drawer */}
+        {showVoiceStudio && (
+          <div className="mt-2 p-3 rounded-2xl bg-studio-900/95 border border-indigo-500/30 space-y-3 shadow-xl">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Mic className="w-3.5 h-3.5" />
+                Kokoro-82M Neural Speaker
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">24kHz + Whisper 16kHz</span>
+            </div>
+
+            {/* 8 Speaker Grid */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {KOKORO_VOICES.map((v) => {
+                const active = currentVoiceId === v.id;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => updateAudioSettings({ voiceId: v.id })}
+                    className={`p-2 rounded-xl border text-left transition-all flex items-center justify-between ${
+                      active
+                        ? "bg-indigo-600/20 border-indigo-500 text-white"
+                        : "bg-studio-950/80 border-white/[0.06] text-slate-300 hover:border-white/15"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1">
+                        <span>{v.name}</span>
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-white/[0.07] text-indigo-300">
+                          {v.accent}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">{v.style}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Speaking Pace Selector */}
+            <div>
+              <div className="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold mb-1">
+                <span>Speaking Pace</span>
+                <span className="text-indigo-300 font-mono">{currentVoiceSpeed}x</span>
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {[
+                  { speed: 0.95, label: "0.95x Calm" },
+                  { speed: 1.05, label: "1.05x Natural" },
+                  { speed: 1.12, label: "1.12x Snappy" },
+                  { speed: 1.24, label: "1.24x Viral" },
+                ].map((sp) => (
+                  <button
+                    key={sp.speed}
+                    onClick={() => updateAudioSettings({ voiceSpeed: sp.speed })}
+                    className={`py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
+                      Math.abs(currentVoiceSpeed - sp.speed) < 0.03
+                        ? "bg-indigo-600/25 border-indigo-500 text-white"
+                        : "bg-studio-950 border-white/[0.06] text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {sp.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Auto-Ducking & Transition SFX Toggles */}
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.06]">
+              <button
+                onClick={() => updateAudioSettings({ sfxEnabled: !sfxEnabled })}
+                className={`p-2 rounded-xl border text-left transition-all ${
+                  sfxEnabled
+                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                    : "bg-studio-950 border-white/[0.06] text-slate-500"
+                }`}
+              >
+                <div className="text-[11px] font-bold">Transition SFX</div>
+                <div className="text-[9px] opacity-80">
+                  {sfxEnabled ? "Whoosh & Pop Active" : "Muted"}
+                </div>
+              </button>
+
+              <button
+                onClick={() => updateAudioSettings({ autoDucking: !autoDucking })}
+                className={`p-2 rounded-xl border text-left transition-all ${
+                  autoDucking
+                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300"
+                    : "bg-studio-950 border-white/[0.06] text-slate-500"
+                }`}
+              >
+                <div className="text-[11px] font-bold">Envelope Ducking</div>
+                <div className="text-[9px] opacity-80">
+                  {autoDucking ? "Swells on Pauses" : "Static Volume"}
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowVoiceStudio(false);
+                onTriggerSync();
+              }}
+              disabled={isSyncing}
+              className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg transition-all"
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span>Synthesize with {KOKORO_VOICES.find((v) => v.id === currentVoiceId)?.name}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Scene Feed (Scrollable List) */}

@@ -42,6 +42,8 @@ export default function StudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scenes,
+          voiceId: state.audio.voiceId || "af_heart",
+          voiceSpeed: state.audio.voiceSpeed || 1.12,
         }),
       });
 

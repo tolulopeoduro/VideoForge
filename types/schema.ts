@@ -89,6 +89,16 @@ export type CameraMotionType =
   | "tilt-3d"
   | "static";
 
+export type KokoroVoiceId =
+  | "af_heart"
+  | "af_bella"
+  | "af_nicole"
+  | "af_sarah"
+  | "am_adam"
+  | "am_michael"
+  | "bf_emma"
+  | "bm_george";
+
 export type GraphicOverlayType =
   | "stat-counter"
   | "lower-third"
@@ -98,7 +108,8 @@ export type GraphicOverlayType =
   | "versus-battle"
   | "quote-card"
   | "timeline-milestone"
-  | "kinetic-title";
+  | "kinetic-title"
+  | "media-card";
 
 export interface MasterVideoState {
   id: string;
@@ -113,6 +124,11 @@ export interface MasterVideoState {
     voiceTrackUrl: string; // The Kokoro-generated .wav
     backgroundMusicUrl?: string;
     musicVolume: number; // For auto-ducking (e.g., 0.2)
+    voiceId?: KokoroVoiceId; // Kokoro speaker persona
+    voiceSpeed?: number; // Speaking speed multiplier (0.85 - 1.35)
+    sfxEnabled?: boolean; // Whoosh & pop sound effects on transitions/overlays
+    sfxVolume?: number; // SFX master volume (0.0 - 1.0)
+    autoDucking?: boolean; // Dynamic envelope ducking when voice is active
   };
   captionConfig?: CaptionStyleConfig;
   scenes: Scene[];
@@ -128,6 +144,10 @@ export interface Scene {
   scriptText: string;
   wordTokens: WordToken[];
 
+  // Optional per-scene speaker override
+  voiceId?: KokoroVoiceId;
+  voiceSpeed?: number;
+
   // Slide transition & 3D WebGL scene options
   transitionStyle?: SlideTransitionStyle;
   threeDScene?: ThreeDScenePreset;
@@ -136,7 +156,7 @@ export interface Scene {
 
   // Visual layers (Base -> 3D -> Overlays -> Mascot -> Captions)
   background: {
-    type: "flux_klein" | "stock" | "color";
+    type: "flux_klein" | "stock" | "color" | "video";
     src: string; // URL or local path or hex color
     motion: CameraMotionType;
     prompt?: string;

@@ -1,5 +1,5 @@
 import React from "react";
-import { Audio, Series, AbsoluteFill, staticFile } from "remotion";
+import { Audio, Series, Sequence, AbsoluteFill, staticFile } from "remotion";
 import { MasterVideoState } from "@/types/schema";
 import { BackgroundLayer } from "./components/BackgroundLayer";
 import { ThreeDLayer } from "./components/ThreeDLayer";
@@ -43,14 +43,61 @@ export const ZeroTrackComposition: React.FC<ZeroTrackCompositionProps> = ({ stat
 
   const bgMusic = resolveAudioSrc(state.audio.backgroundMusicUrl);
   const voiceTrack = resolveAudioSrc(state.audio.voiceTrackUrl);
+  const sfxWhoosh = staticFile("/audio/sfx-whoosh.wav");
+  const sfxPop = staticFile("/audio/sfx-pop.wav");
+
+  const baseMusicVolume = state.audio.musicVolume ?? 0.18;
+  const autoDucking = state.audio.autoDucking !== false;
+  const sfxEnabled = state.audio.sfxEnabled !== false;
+  const sfxVolume = state.audio.sfxVolume ?? 0.32;
+
+  // Frame-accurate envelope auto-ducking callback for background music
+  const computeMusicVolume = (globalFrame: number) => {
+    if (!autoDucking) return baseMusicVolume;
+
+    // Locate active scene at globalFrame
+    let cursor = 0;
+    for (const sc of state.scenes) {
+      const scStart = cursor;
+      const scEnd = cursor + sc.durationInFrames;
+      cursor = scEnd;
+
+      if (globalFrame >= scStart && globalFrame < scEnd) {
+        const localFrame = globalFrame - scStart;
+        // Swell music slightly during slide transition boundaries (first 5 frames & last 8 frames of slide)
+        if (localFrame < 4 || localFrame > sc.durationInFrames - 8) {
+          return Math.min(1, baseMusicVolume * 1.35);
+        }
+        // Check if inside a pause between sentences in wordTokens
+        if (sc.wordTokens && sc.wordTokens.length > 1) {
+          const isGlobal = sc.startFrame > 0 && sc.wordTokens[0].startFrame >= sc.startFrame - 6;
+          for (let i = 0; i < sc.wordTokens.length - 1; i++) {
+            const currEnd = isGlobal
+              ? sc.wordTokens[i].endFrame - sc.startFrame
+              : sc.wordTokens[i].endFrame;
+            const nextStart = isGlobal
+              ? sc.wordTokens[i + 1].startFrame - sc.startFrame
+              : sc.wordTokens[i + 1].startFrame;
+            if (nextStart - currEnd >= 8 && localFrame > currEnd + 2 && localFrame < nextStart - 2) {
+              // Swell during mid-scene dramatic pause
+              return Math.min(1, baseMusicVolume * 1.25);
+            }
+          }
+        }
+        // Duck cleanly while narrator voice is speaking
+        return baseMusicVolume * 0.65;
+      }
+    }
+    return baseMusicVolume;
+  };
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#090d16", overflow: "hidden" }}>
-      {/* Background Music with Auto-Ducking */}
+      {/* Background Music with Dynamic Frame-Level Envelope Auto-Ducking */}
       {bgMusic && (
         <Audio
           src={bgMusic}
-          volume={state.audio.musicVolume ?? 0.18}
+          volume={computeMusicVolume}
           loop
           pauseWhenBuffering={false}
           acceptableTimeShiftInSeconds={2}
@@ -87,11 +134,33 @@ export const ZeroTrackComposition: React.FC<ZeroTrackCompositionProps> = ({ stat
               key={scene.id}
               durationInFrames={Math.max(1, scene.durationInFrames)}
             >
+              {/* Transition Whoosh SFX on slide changes */}
+              {sfxEnabled && idx > 0 && defaultTransition !== "cut" && (
+                <Sequence from={0} durationInFrames={15}>
+                  <Audio
+                    src={sfxWhoosh}
+                    volume={sfxVolume}
+                    onError={() => {}}
+                  />
+                </Sequence>
+              )}
+
+              {/* Graphic Overlay Pop SFX when card enters */}
+              {sfxEnabled && scene.overlays && scene.overlays.length > 0 && (
+                <Sequence from={4} durationInFrames={10}>
+                  <Audio
+                    src={sfxPop}
+                    volume={sfxVolume * 0.85}
+                    onError={() => {}}
+                  />
+                </Sequence>
+              )}
+
               <SlideTransitionWrapper
                 style={defaultTransition}
                 durationInFrames={scene.durationInFrames}
               >
-                {/* Layer 1: Background (FLUX Klein / Stock / Color with 6 Camera Motions) */}
+                {/* Layer 1: Background (Video B-Roll / FLUX Klein / Stock / Color with 6 Camera Motions) */}
                 <BackgroundLayer
                   background={scene.background}
                   sceneDurationInFrames={scene.durationInFrames}
@@ -104,7 +173,7 @@ export const ZeroTrackComposition: React.FC<ZeroTrackCompositionProps> = ({ stat
                   sceneDurationInFrames={scene.durationInFrames}
                 />
 
-                {/* Layer 3: Remotion Physics Graphic Overlays (9 Types) */}
+                {/* Layer 3: Remotion Physics Graphic Overlays (10 Types incl. PiP Media Card) */}
                 <OverlaysLayer
                   overlays={scene.overlays}
                   mascot={scene.mascot}

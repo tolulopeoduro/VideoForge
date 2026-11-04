@@ -41,6 +41,10 @@ import {
   Quote,
   Clock,
   Type,
+  Search,
+  Upload,
+  Video as VideoIcon,
+  Plus,
 } from "lucide-react";
 
 interface RightInspectorPanelProps {
@@ -281,6 +285,11 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
 }) => {
   const [isGeneratingBg, setIsGeneratingBg] = useState(false);
   const [activeTab, setActiveTab] = useState<"subs" | "3d" | "background" | "mascot" | "overlays">("subs");
+  const [brollQuery, setBrollQuery] = useState("");
+  const [brollResults, setBrollResults] = useState<any[]>([]);
+  const [isSearchingBroll, setIsSearchingBroll] = useState(false);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const captionCfg: CaptionStyleConfig = {
     ...DEFAULT_CAPTION_CONFIG,
@@ -402,12 +411,89 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
         headline: "UNSTOPPABLE DYNASTY",
         accentColor: "#6366f1",
       };
+    } else if (type === "media-card") {
+      props = {
+        title: "B-Roll Feed",
+        badge: "LIVE PIP",
+        caption: "Source Visual Reference",
+        mediaUrl: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=900&q=80",
+        mediaType: "auto",
+        accentColor: "#6366f1",
+        tilt3D: true,
+      };
     }
 
     updateScene((s) => ({
       ...s,
       overlays: [...s.overlays, { id, type, props }],
     }));
+  };
+
+  const handleSearchBroll = async (customQuery?: string) => {
+    const q = (customQuery ?? brollQuery).trim() || scene.scriptText.slice(0, 48);
+    setIsSearchingBroll(true);
+    try {
+      const res = await fetch(`/api/broll?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (data.items) {
+        setBrollResults(data.items);
+      }
+    } catch (e) {
+      console.error("B-Roll search error:", e);
+    } finally {
+      setIsSearchingBroll(false);
+    }
+  };
+
+  const handleUploadFile = async (file: File, target: "background" | "pip") => {
+    if (!file) return;
+    setIsUploadingMedia(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload-media", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.url) {
+        if (target === "background") {
+          updateScene((s) => ({
+            ...s,
+            background: {
+              ...s.background,
+              type: data.mediaType === "video" ? "video" : "stock",
+              src: data.url,
+            },
+          }));
+        } else {
+          const id = `overlay-${Date.now()}`;
+          updateScene((s) => ({
+            ...s,
+            overlays: [
+              ...s.overlays,
+              {
+                id,
+                type: "media-card",
+                props: {
+                  title: file.name.replace(/\.[^.]+$/, "").slice(0, 24),
+                  badge: data.mediaType === "video" ? "VIDEO PIP" : "SCREENSHOT",
+                  caption: "Uploaded Studio Media",
+                  mediaUrl: data.url,
+                  mediaType: data.mediaType,
+                  accentColor: "#6366f1",
+                  tilt3D: true,
+                },
+              },
+            ],
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Media upload failed:", err);
+    } finally {
+      setIsUploadingMedia(false);
+    }
   };
 
   const handleUpdateOverlayProps = (overlayId: string, newProps: Record<string, any>) => {
@@ -943,15 +1029,15 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
           </div>
         )}
 
-        {/* ================= BACKGROUND TAB ================= */}
+        {/* ================= BACKGROUND & B-ROLL TAB ================= */}
         {activeTab === "background" && (
           <div className="space-y-4">
             <div>
               <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-2">
                 Background Layer Type
               </label>
-              <div className="grid grid-cols-3 gap-1.5 bg-studio-900 p-1 rounded-xl border border-white/[0.06] text-xs">
-                {(["color", "flux_klein", "stock"] as const).map((t) => (
+              <div className="grid grid-cols-4 gap-1 bg-studio-900 p-1 rounded-xl border border-white/[0.06] text-[11px]">
+                {(["color", "flux_klein", "stock", "video"] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() =>
@@ -963,9 +1049,211 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                         : "text-slate-400 hover:text-slate-200"
                     }`}
                   >
-                    {t === "flux_klein" ? "FLUX Klein" : t}
+                    {t === "flux_klein" ? "FLUX" : t === "video" ? "B-Roll" : t}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Live B-Roll Video & Stock Media Search */}
+            <div className="bg-studio-900/60 border border-white/[0.08] rounded-2xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <VideoIcon className="w-3.5 h-3.5" />
+                  B-Roll Video & Media Library
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const words = scene.scriptText
+                      .replace(/[^\w\s]/g, "")
+                      .split(/\s+/)
+                      .filter((w) => w.length > 3)
+                      .slice(0, 3)
+                      .join(" ");
+                    setBrollQuery(words);
+                    handleSearchBroll(words);
+                  }}
+                  className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline flex items-center gap-1"
+                >
+                  <Sparkles className="w-2.5 h-2.5" />
+                  Match Script
+                </button>
+              </div>
+
+              <div className="flex gap-1.5">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={brollQuery}
+                    onChange={(e) => setBrollQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearchBroll()}
+                    placeholder="Search HD video B-roll (e.g. stadium, tech, market)..."
+                    className="w-full bg-studio-950 border border-white/[0.08] rounded-xl pl-8 pr-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSearchBroll()}
+                  disabled={isSearchingBroll}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all"
+                >
+                  {isSearchingBroll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Find"}
+                </button>
+              </div>
+
+              {/* Quick B-Roll Category Pills */}
+              <div className="flex flex-wrap gap-1">
+                {["stadium", "tech ai", "stock market", "deep space", "ancient rome"].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      setBrollQuery(tag);
+                      handleSearchBroll(tag);
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-studio-950 hover:bg-studio-800 border border-white/[0.06] text-slate-300 capitalize"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+
+              {/* B-Roll Results Grid */}
+              {brollResults.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                  {brollResults.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-xl overflow-hidden bg-studio-950 border border-white/[0.08] flex flex-col justify-between group"
+                    >
+                      <div className="relative h-20 bg-black overflow-hidden">
+                        <img
+                          src={item.thumbnail}
+                          alt={item.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                        <span
+                          className={`absolute top-1.5 left-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                            item.mediaType === "video"
+                              ? "bg-emerald-500 text-slate-950"
+                              : "bg-indigo-600 text-white"
+                          }`}
+                        >
+                          {item.mediaType === "video" ? "HD MP4" : "PHOTO"}
+                        </span>
+                      </div>
+                      <div className="p-2 space-y-1.5">
+                        <div className="text-[10px] font-bold text-slate-200 truncate" title={item.title}>
+                          {item.title}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateScene((s) => ({
+                                ...s,
+                                background: {
+                                  ...s.background,
+                                  type: item.mediaType === "video" ? "video" : "stock",
+                                  src: item.url,
+                                },
+                              }))
+                            }
+                            className="py-1 rounded bg-studio-accent/25 hover:bg-studio-accent text-[10px] font-bold text-white transition-colors"
+                          >
+                            Set Bg
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const id = `overlay-${Date.now()}`;
+                              updateScene((s) => ({
+                                ...s,
+                                overlays: [
+                                  ...s.overlays,
+                                  {
+                                    id,
+                                    type: "media-card",
+                                    props: {
+                                      title: item.title.slice(0, 22),
+                                      badge: item.mediaType === "video" ? "B-ROLL VIDEO" : "B-ROLL PHOTO",
+                                      caption: `${item.source} • Visual Reference`,
+                                      mediaUrl: item.url,
+                                      mediaType: item.mediaType,
+                                      accentColor: "#10b981",
+                                      tilt3D: true,
+                                    },
+                                  },
+                                ],
+                              }));
+                            }}
+                            className="py-1 rounded bg-emerald-600/25 hover:bg-emerald-600 text-[10px] font-bold text-emerald-200 hover:text-white transition-colors"
+                          >
+                            + PiP Card
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Drag-and-Drop Local Video / Image Upload Zone */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDraggingOver(true);
+              }}
+              onDragLeave={() => setIsDraggingOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDraggingOver(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleUploadFile(file, "background");
+              }}
+              className={`rounded-2xl border-2 border-dashed p-3.5 text-center transition-all ${
+                isDraggingOver
+                  ? "border-emerald-400 bg-emerald-500/10"
+                  : "border-white/[0.1] bg-studio-900/40 hover:border-white/20"
+              }`}
+            >
+              <Upload className="w-5 h-5 text-indigo-400 mx-auto mb-1" />
+              <div className="text-xs font-bold text-slate-200">
+                {isUploadingMedia ? "Uploading Media..." : "Drop MP4 Video or Image Here"}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5 mb-2.5">
+                Supports .mp4, .webm, .png, .jpg for Background or 3D PiP Card
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="py-1.5 px-2 rounded-xl bg-studio-950 hover:bg-studio-800 border border-white/[0.08] text-[10px] font-bold text-indigo-300 cursor-pointer flex items-center justify-center gap-1">
+                  <Upload className="w-3 h-3" />
+                  <span>Upload as Bg</span>
+                  <input
+                    type="file"
+                    accept="video/*,image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUploadFile(f, "background");
+                    }}
+                  />
+                </label>
+                <label className="py-1.5 px-2 rounded-xl bg-studio-950 hover:bg-studio-800 border border-white/[0.08] text-[10px] font-bold text-emerald-300 cursor-pointer flex items-center justify-center gap-1">
+                  <Plus className="w-3 h-3" />
+                  <span>Upload as 3D PiP</span>
+                  <input
+                    type="file"
+                    accept="video/*,image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUploadFile(f, "pip");
+                    }}
+                  />
+                </label>
               </div>
             </div>
 
@@ -1306,10 +1594,17 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                 </button>
                 <button
                   onClick={() => handleAddOverlay("code-snippet")}
-                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all col-span-2"
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-white/[0.08] text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-2 transition-all"
                 >
                   <Code className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Code Terminal Card</span>
+                  <span>Code Terminal</span>
+                </button>
+                <button
+                  onClick={() => handleAddOverlay("media-card")}
+                  className="p-2 rounded-xl bg-studio-900 hover:bg-studio-850 border border-emerald-500/30 text-xs font-semibold text-emerald-300 hover:text-white flex items-center gap-2 transition-all"
+                >
+                  <VideoIcon className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>3D PiP Media</span>
                 </button>
               </div>
             </div>
@@ -1564,6 +1859,61 @@ export const RightInspectorPanel: React.FC<RightInspectorPanelProps> = ({
                             handleUpdateOverlayProps(overlay.id, {
                               ...overlay.props,
                               subtitle: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                        />
+                      </div>
+                    )}
+
+                    {overlay.type === "media-card" && (
+                      <div className="space-y-2 text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Card Title"
+                            value={overlay.props.title || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                title: e.target.value,
+                              })
+                            }
+                            className="bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Badge (e.g. LIVE PIP)"
+                            value={overlay.props.badge || ""}
+                            onChange={(e) =>
+                              handleUpdateOverlayProps(overlay.id, {
+                                ...overlay.props,
+                                badge: e.target.value,
+                              })
+                            }
+                            className="bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Image or MP4 Video URL"
+                          value={overlay.props.mediaUrl || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              mediaUrl: e.target.value,
+                            })
+                          }
+                          className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Caption Footer"
+                          value={overlay.props.caption || ""}
+                          onChange={(e) =>
+                            handleUpdateOverlayProps(overlay.id, {
+                              ...overlay.props,
+                              caption: e.target.value,
                             })
                           }
                           className="w-full bg-studio-950 border border-white/[0.08] rounded-lg p-2 text-slate-200 outline-none"

@@ -1,5 +1,5 @@
 import React from "react";
-import { interpolate, useCurrentFrame, Img, staticFile } from "remotion";
+import { interpolate, useCurrentFrame, Img, Video, staticFile } from "remotion";
 import { Scene } from "@/types/schema";
 
 interface BackgroundLayerProps {
@@ -7,13 +7,25 @@ interface BackgroundLayerProps {
   sceneDurationInFrames: number;
 }
 
-const resolveImageSrc = (src: string) => {
+const resolveMediaSrc = (src: string) => {
   if (!src) return "";
   if (src.startsWith("/generated/")) {
     return `/api/media/${src.replace("/generated/", "")}`;
   }
   if (src.startsWith("/")) return staticFile(src);
   return src;
+};
+
+const isVideoSource = (type: string, src: string) => {
+  if (type === "video") return true;
+  if (!src) return false;
+  const clean = src.split("?")[0].toLowerCase();
+  return (
+    clean.endsWith(".mp4") ||
+    clean.endsWith(".webm") ||
+    clean.endsWith(".mov") ||
+    src.startsWith("data:video/")
+  );
 };
 
 export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
@@ -120,14 +132,28 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
           transformOrigin: "center center",
         }}
       >
-        {background.src.startsWith("<svg") ? (
+        {isVideoSource(background.type, background.src) ? (
+          <Video
+            src={resolveMediaSrc(background.src)}
+            muted
+            loop
+            pauseWhenBuffering={false}
+            acceptableTimeShiftInSeconds={2}
+            onError={(err) => console.warn("B-Roll video background warning:", err)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        ) : background.src.startsWith("<svg") ? (
           <div
             style={{ width: "100%", height: "100%" }}
             dangerouslySetInnerHTML={{ __html: background.src }}
           />
         ) : background.src.endsWith(".svg") || background.src.includes(".svg") ? (
           <img
-            src={resolveImageSrc(background.src)}
+            src={resolveMediaSrc(background.src)}
             alt="Background"
             style={{
               width: "100%",
@@ -137,7 +163,7 @@ export const BackgroundLayer: React.FC<BackgroundLayerProps> = ({
           />
         ) : (
           <Img
-            src={resolveImageSrc(background.src)}
+            src={resolveMediaSrc(background.src)}
             style={{
               width: "100%",
               height: "100%",

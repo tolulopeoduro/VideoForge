@@ -148,13 +148,23 @@ except ImportError:
 
 HAS_MACOS_SAY = bool(shutil.which("say") and shutil.which("afconvert"))
 
-def synthesize_kokoro_neural(scenes, output_path):
+def synthesize_kokoro_neural(scenes, output_path, default_voice="af_heart", default_speed=1.12):
     """
     Synthesizes speech using the Kokoro-82M neural model at 24kHz,
-    and extracts word-level timestamps with Faster-Whisper.
+    supporting American ('a') and British ('b') voices and per-scene speaker/speed overrides,
+    and extracts word-level timestamps with Faster-Whisper at 16kHz.
     """
-    emit_progress("synthesizing_speech", 15, "Initializing Kokoro-82M neural pipeline...")
-    pipeline = kokoro.KPipeline(lang_code="a")
+    emit_progress("synthesizing_speech", 15, f"Initializing Kokoro-82M neural pipeline ({default_voice})...")
+    pipelines = {}
+
+    def get_kpipeline(voice_name):
+        lang = "b" if str(voice_name).startswith(("bf_", "bm_")) else "a"
+        if lang not in pipelines:
+            pipelines[lang] = kokoro.KPipeline(lang_code=lang)
+        return pipelines[lang]
+
+    # Pre-warm primary pipeline
+    get_kpipeline(default_voice)
 
     emit_progress("transcribing_alignment", 28, "Initializing Faster-Whisper alignment model...")
     whisper_model = WhisperModel("tiny.en", device="cpu", compute_type="int8")
@@ -166,16 +176,21 @@ def synthesize_kokoro_neural(scenes, output_path):
 
     for idx, scene in enumerate(scenes):
         text = scene.get("scriptText", "").strip() or "Scene pause."
+        scene_voice = scene.get("voiceId") or default_voice or "af_heart"
+        scene_speed = float(scene.get("voiceSpeed") or default_speed or 1.12)
+        scene_speed = max(0.75, min(1.45, scene_speed))
+
         progress_pct = 30 + int(48 * (idx + 1) / total_scenes)
         emit_progress(
             "synthesizing_speech",
             progress_pct,
-            f"Synthesizing Kokoro voice for Scene {idx + 1}/{total_scenes}..."
+            f"Synthesizing Kokoro ({scene_voice} @ {scene_speed:.2f}x) for Scene {idx + 1}/{total_scenes}..."
         )
 
         scene_start_frame = cumulative_frames
         scene_chunks = []
-        for _, _, chunk in pipeline(text, voice="af_heart", speed=1.12):
+        kpipe = get_kpipeline(scene_voice)
+        for _, _, chunk in kpipe(text, voice=scene_voice, speed=scene_speed):
             arr = chunk.numpy() if hasattr(chunk, "numpy") else np.array(chunk)
             scene_chunks.append(arr)
 
@@ -257,13 +272,24 @@ def synthesize_kokoro_neural(scenes, output_path):
 
     return updated_scenes, total_frames
 
-def synthesize_macos_say(scenes, output_path):
+def synthesize_macos_say(scenes, output_path, default_voice="af_heart", default_speed=1.12):
     """
     Uses macOS native speech synthesis for real human voiceover at 24kHz,
     computing precise word tokens and locking frames to actual spoken audio.
     """
     emit_progress("synthesizing_speech", 15, "Initializing native speech engine...")
     time.sleep(0.1)
+
+    MACOS_VOICE_MAP = {
+        "af_heart": "Samantha",
+        "af_bella": "Victoria",
+        "af_nicole": "Allison",
+        "af_sarah": "Samantha",
+        "am_adam": "Alex",
+        "am_michael": "Tom",
+        "bf_emma": "Serena",
+        "bm_george": "Daniel",
+    }
 
     all_audio_bytes = bytearray()
     updated_scenes = []
@@ -273,6 +299,10 @@ def synthesize_macos_say(scenes, output_path):
     with tempfile.TemporaryDirectory() as tmp_dir:
         for idx, scene in enumerate(scenes):
             text = scene.get("scriptText", "").strip()
+            scene_voice = scene.get("voiceId") or default_voice or "af_heart"
+            scene_speed = float(scene.get("voiceSpeed") or default_speed or 1.12)
+            wpm = str(int(round(175 * scene_speed)))
+            mac_voice = MACOS_VOICE_MAP.get(scene_voice, "Samantha")
 
             scene_start_frame = cumulative_frames
             progress_pct = 20 + int(45 * (idx + 1) / total_scenes)
@@ -286,7 +316,10 @@ def synthesize_macos_say(scenes, output_path):
             wav_file = os.path.join(tmp_dir, f"scene_{idx}.wav")
 
             clean_text = re.sub(r'["`$]', "", text) if text else "Scene pause."
-            subprocess.run(["say", "-r", "195", "-o", aiff_file, clean_text], check=True)
+            try:
+                subprocess.run(["say", "-v", mac_voice, "-r", wpm, "-o", aiff_file, clean_text], check=True)
+            except Exception:
+                subprocess.run(["say", "-r", wpm, "-o", aiff_file, clean_text], check=True)
             subprocess.run(
                 ["afconvert", "-f", "WAVE", "-d", "LEI16@24000", aiff_file, wav_file],
                 check=True
@@ -452,7 +485,7 @@ def synthesize_fallback_wav(scenes, output_path):
 
     return updated_scenes, total_frames
 
-def run_production_or_fallback(scenes, output_path):
+def run_production_or_fallback(scenes, output_path, default_voice="af_heart", default_speed=1.12):
     """
     Tiered Speech Synthesis:
     1. Kokoro-82M neural model + Faster-Whisper alignment (Primary).
@@ -461,17 +494,68 @@ def run_production_or_fallback(scenes, output_path):
     """
     if HAS_KOKORO and HAS_WHISPER and HAS_SOUNDFILE:
         try:
-            return synthesize_kokoro_neural(scenes, output_path)
+            return synthesize_kokoro_neural(scenes, output_path, default_voice, default_speed)
         except Exception as e:
             emit_progress("synthesizing_speech", 25, f"Neural engine warning: {e}. Falling back to native speech.")
 
     if HAS_MACOS_SAY:
         try:
-            return synthesize_macos_say(scenes, output_path)
+            return synthesize_macos_say(scenes, output_path, default_voice, default_speed)
         except Exception as say_err:
             emit_progress("synthesizing_speech", 25, f"Native say warning: {say_err}. Using acoustic engine.")
 
     return synthesize_fallback_wav(scenes, output_path)
+
+
+def generate_studio_sfx(audio_dir="public/audio"):
+    """
+    Synthesizes studio-grade transition whoosh and overlay pop sound effects
+    for Remotion choreography if not already present.
+    """
+    os.makedirs(audio_dir, exist_ok=True)
+    whoosh_path = os.path.join(audio_dir, "sfx-whoosh.wav")
+    pop_path = os.path.join(audio_dir, "sfx-pop.wav")
+
+    if not os.path.exists(whoosh_path):
+        # 0.36s cinematic transition whoosh (frequency-swept sub-punch + airy noise envelope)
+        dur = 0.36
+        n = int(dur * SAMPLE_RATE)
+        samples = []
+        for i in range(n):
+            t = i / float(SAMPLE_RATE)
+            progress = i / float(n)
+            env = math.sin(math.pi * progress) ** 1.6
+            # Sweeping low-mid resonant sine + deterministic pseudo-noise
+            freq = 95.0 + 340.0 * math.sin(math.pi * progress)
+            noise = math.sin(i * 12.9898) * math.cos(i * 78.233)
+            val = (0.55 * math.sin(2 * math.pi * freq * t) + 0.35 * noise) * env * 0.45
+            s16 = max(-32767, min(32767, int(val * 32767)))
+            samples.append(s16)
+        with wave.open(whoosh_path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SAMPLE_RATE)
+            wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+    if not os.path.exists(pop_path):
+        # 0.16s crisp UI graphic overlay pop (fast exponential pitch drop 520Hz -> 140Hz)
+        dur = 0.16
+        n = int(dur * SAMPLE_RATE)
+        samples = []
+        phase = 0.0
+        for i in range(n):
+            progress = i / float(n)
+            env = (1.0 - progress) ** 2.2 * math.sin(min(1.0, progress * 12.0) * (math.pi / 2.0))
+            freq = 140.0 + 420.0 * ((1.0 - progress) ** 2.4)
+            phase += (2.0 * math.pi * freq) / float(SAMPLE_RATE)
+            val = math.sin(phase) * env * 0.52
+            s16 = max(-32767, min(32767, int(val * 32767)))
+            samples.append(s16)
+        with wave.open(pop_path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SAMPLE_RATE)
+            wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 def generate_ambient_music(output_path, duration_sec=45.0):
     """Generates a soft, lofi chill ambient background track for auto-ducking."""
@@ -519,6 +603,9 @@ def run_pipeline(payload):
         emit({"type": "error", "error": "No scenes provided in payload."})
         return
 
+    default_voice = payload.get("voiceId") or "af_heart"
+    default_speed = float(payload.get("voiceSpeed") or 1.12)
+
     output_dir = payload.get("outputDir", "public/generated")
     audio_filename = payload.get("audioFilename", f"voice_{int(time.time())}.wav")
     audio_full_path = os.path.join(output_dir, audio_filename)
@@ -527,11 +614,17 @@ def run_pipeline(payload):
     music_path = os.path.join("public", "audio", "chill-beat.wav")
     try:
         generate_ambient_music(music_path)
+        generate_studio_sfx(os.path.join("public", "audio"))
     except Exception:
         pass
 
     try:
-        updated_scenes, total_frames = run_production_or_fallback(scenes, audio_full_path)
+        updated_scenes, total_frames = run_production_or_fallback(
+            scenes,
+            audio_full_path,
+            default_voice=default_voice,
+            default_speed=default_speed
+        )
 
         emit_progress("done", 100, "Audio and timing alignment complete.")
 

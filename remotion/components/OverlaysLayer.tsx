@@ -9,6 +9,7 @@ import { VersusBattleOverlay } from "./overlays/VersusBattleOverlay";
 import { QuoteCardOverlay } from "./overlays/QuoteCardOverlay";
 import { TimelineMilestoneOverlay } from "./overlays/TimelineMilestoneOverlay";
 import { KineticTitleOverlay } from "./overlays/KineticTitleOverlay";
+import { MediaCardOverlay } from "./overlays/MediaCardOverlay";
 import { useVideoConfig } from "remotion";
 
 interface OverlaysLayerProps {
@@ -74,6 +75,8 @@ export const OverlaysLayer: React.FC<OverlaysLayerProps> = ({ overlays }) => {
               return <TimelineMilestoneOverlay key={overlay.id} {...overlay.props} />;
             case "kinetic-title":
               return <KineticTitleOverlay key={overlay.id} {...overlay.props} />;
+            case "media-card":
+              return <MediaCardOverlay key={overlay.id} {...overlay.props} />;
             default:
               return null;
           }
